@@ -12,7 +12,6 @@ import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.slf4j.LoggerFactory
 import org.incal.spark_ml.transformers._
 import org.incal.spark_ml.models.{LearningSetting, ReservoirSpec}
-import org.incal.spark_ml.ParamGrid
 import org.incal.spark_ml.models.classification.{Classification, ClassificationEvalMetric}
 import org.incal.spark_ml.models.regression.{Regression, RegressionEvalMetric}
 import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
@@ -80,10 +79,10 @@ trait SparkMLService {
 
   def classify(
     df: DataFrame,
-    replicationDf: Option[DataFrame],
+    replicationDf: Option[DataFrame] = None,
     mlModel: Classification,
     setting: LearningSetting[ClassificationEvalMetric.Value],
-    binCurvesNumBins: Option[Int]
+    binCurvesNumBins: Option[Int] = None
   ): Future[ClassificationResultsHolder]  = {
 
     // k-folds cross validator
@@ -101,18 +100,19 @@ trait SparkMLService {
 
   def classifyTimeSeries(
     df: DataFrame,
-    replicationDf: Option[DataFrame],
+    replicationDf: Option[DataFrame] = None,
     predictAhead: Int,
-    windowSize: Option[Int],
-    reservoirSetting: Option[ReservoirSpec],
+    windowSize: Option[Int] = None,
+    reservoirSetting: Option[ReservoirSpec] = None,
     mlModel: Classification,
     setting: LearningSetting[ClassificationEvalMetric.Value],
-    minCrossValidationTrainingSize: Option[Double],
-    binCurvesNumBins: Option[Int]
+    minCrossValidationTrainingSize: Option[Double] = None,
+    binCurvesNumBins: Option[Int] = None,
+    groupIdCol: Option[String] = None
   ): Future[ClassificationResultsHolder] = {
 
     // time series transformers/stages
-    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead)
+    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead, groupIdCol)
 
     // forward-chaining cross validator
     val crossValidatorCreator = setting.crossValidationFolds.map(
@@ -150,7 +150,7 @@ trait SparkMLService {
     classifyAux(df, replicationDf, mlModel, setting, binCurvesNumBins, splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids)
   }
 
-  private def classifyAux(
+  protected def classifyAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
     mlModel: Classification,
@@ -255,7 +255,7 @@ trait SparkMLService {
 
   def regress(
     df: DataFrame,
-    replicationDf: Option[DataFrame],
+    replicationDf: Option[DataFrame] = None,
     mlModel: Regression,
     setting: LearningSetting[RegressionEvalMetric.Value]
   ): Future[RegressionResultsHolder] = {
@@ -275,16 +275,17 @@ trait SparkMLService {
 
   def regressTimeSeries(
     df: DataFrame,
-    replicationDf: Option[DataFrame],
+    replicationDf: Option[DataFrame] = None,
     predictAhead: Int,
-    windowSize: Option[Int],
-    reservoirSetting: Option[ReservoirSpec],
+    windowSize: Option[Int] = None,
+    reservoirSetting: Option[ReservoirSpec] = None,
     mlModel: Regression,
     setting: LearningSetting[RegressionEvalMetric.Value],
-    minCrossValidationTrainingSize: Option[Double]
+    minCrossValidationTrainingSize: Option[Double] = None,
+    groupIdCol: Option[String] = None
   ): Future[RegressionResultsHolder] = {
     // time series transformers/stages
-    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead)
+    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead, groupIdCol)
     //    val showDf = SchemaUnchangedTransformer { df: DataFrame => df.orderBy(seriesOrderCol).show(false); df }
 
     // forward-chaining cross validator
@@ -302,7 +303,7 @@ trait SparkMLService {
     regressAux(df, replicationDf, mlModel, setting, split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps, true)
   }
 
-  private def regressAux(
+  protected def regressAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
     mlModel: Regression,
@@ -417,17 +418,21 @@ trait SparkMLService {
   private def createTimeSeriesStagesWithParamGrids(
     windowSize: Option[Int],
     reservoirSetting: Option[ReservoirSpec],
-    labelShift: Int
+    labelShift: Int,
+    groupCol: Option[String] = None
   ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]]) = {
     if (windowSize.isEmpty && reservoirSetting.isEmpty)
       logger.warn("Window size or reservoir setting should be set for time series transformations.")
 
     val dlTransformer = windowSize.map(
       if (useConsecutiveOrderForDL)
-        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol)
+        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, groupCol)
       else
-        SlidingWindow.applyInPlace("features", seriesOrderCol)
+        SlidingWindow.applyInPlace("features", seriesOrderCol, groupCol)
     )
+
+    if (reservoirSetting.isDefined && groupCol.isDefined)
+      throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${groupCol.get}, which is currently unsupported.")
 
     val rcTransformerWithParamGrids = reservoirSetting.map(rcStatesWindowFactory.applyInPlace("features", seriesOrderCol))
 
@@ -436,9 +441,9 @@ trait SparkMLService {
 
     val labelShiftTransformer =
       if (useConsecutiveOrderForDL)
-        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol)(labelShift)
+        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, groupCol)(labelShift)
       else
-        SeqShift.applyInPlace("label", seriesOrderCol)(labelShift)
+        SeqShift.applyInPlace("label", seriesOrderCol, groupCol)(labelShift)
 
     val stages = Seq(
       dlTransformer.map(() => _),

@@ -10,6 +10,14 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions.{collect_list, _}
 import org.incal.spark_ml.SparkUtil.{assembleVectors, transformInPlace}
 
+/**
+  * Handy transformer that turns a data frame with an order column, such as time,
+  * optionally with grouping by individuals (e.g., independent trajectories) into overlapping
+  * sequences obtained by a window of a given size sliding from the start to the end.
+  *
+  * @author Peter Banda
+  * @since 2018
+  */
 private class SlidingWindow(override val uid: String) extends Transformer with DefaultParamsWritable {
 
   def this() = this(Identifiable.randomUID("sliding_window"))
@@ -18,11 +26,13 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
   protected final val inputCol: Param[String] = new Param[String](this, "inputCol", "input column name")
   protected final val orderCol: Param[String] = new Param[String](this, "orderCol", "order column name")
   protected final val outputCol: Param[String] = new Param[String](this, "outputCol", "output column name")
+  protected final val groupCol: Param[String] = new Param[String](this, "groupCol", "group column name")
 
   def setWindowSize(value: Int): this.type = set(windowSize, value)
   def setInputCol(value: String): this.type = set(inputCol, value)
   def setOrderCol(value: String): this.type = set(orderCol, value)
   def setOutputCol(value: String): this.type = set(outputCol, value)
+  def setGroupCol(value: Option[String]) = value.map(set(groupCol, _)).getOrElse(SlidingWindow.this)
 
   private val flattenVectors = udf {
     assembleVectors(_: Seq[Vector])
@@ -36,7 +46,12 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
     val inputType = dataset.schema($(inputCol)).dataType
 
     // data frame with a sliding window
-    val windowSpec = Window.orderBy($(orderCol)).rowsBetween(1 - $(windowSize), 0)
+    val windowSpecBase = get(groupCol) match {
+      case Some(groupCol) => Window.partitionBy(groupCol).orderBy($(orderCol))
+      case None => Window.orderBy($(orderCol))
+    }
+
+    val windowSpec = windowSpecBase.rowsBetween(1 - $(windowSize), 0)
     val windowDf = dataset.withColumn($(outputCol), collect_list(dataset($(inputCol))).over(windowSpec))
 
     // remove init. entries with a fewer elements than the window size
@@ -76,17 +91,19 @@ object SlidingWindow {
   def apply(
     inputCol: String,
     orderCol: String,
-    outputCol: String)(
+    outputCol: String,
+    groupCol: Option[String] = None)(
     windowSize: Int
-  ): Transformer = new SlidingWindow().setWindowSize(windowSize).setInputCol(inputCol).setOrderCol(orderCol).setOutputCol(outputCol)
+  ): Transformer = new SlidingWindow().setWindowSize(windowSize).setInputCol(inputCol).setOrderCol(orderCol).setOutputCol(outputCol).setGroupCol(groupCol)
 
   def applyInPlace(
     inputOutputCol: String,
-    orderCol: String)(
+    orderCol: String,
+    groupCol: Option[String] = None)(
     windowSize: Int
   ): Estimator[PipelineModel] =
     transformInPlace(
-      apply(inputOutputCol, orderCol, _)(windowSize),
+      apply(inputOutputCol, orderCol, _, groupCol)(windowSize),
       inputOutputCol
     )
 }

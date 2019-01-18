@@ -25,6 +25,12 @@ object MachineLearningUtil {
     (headDf, tailDf)
   }
 
+  val splitByValue = (orderColumn: String) => (splitValue: Double) => (df: DataFrame) => {
+    val headDf = df.where(df(orderColumn) <= splitValue)
+    val tailDf = df.where(df(orderColumn) > splitValue)
+    (headDf, tailDf)
+  }
+
   val independentTestPredictions =
     (mlModel: Transformer, testDf: Dataset[_], _: Dataset[_]) => mlModel.transform(testDf)
 
