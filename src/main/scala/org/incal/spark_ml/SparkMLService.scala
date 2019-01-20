@@ -549,7 +549,7 @@ trait SparkMLService {
     setting: LearningSetting[_]
   ): Seq[() => PipelineStage] = {
     // normalize the features
-    val normalize = setting.featuresNormalizationType.map(VectorColumnScalerNormalizer.applyInPlace(_, "features"))
+    val normalize = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
 
     // reduce the dimensionality if needed
     val reduceDim = setting.pcaDims.map(InPlacePCA(_))
@@ -569,7 +569,7 @@ trait SparkMLService {
     setting: LearningSetting[_]
   ): Seq[() => PipelineStage] = {
     // normalize the features
-    val normalize = setting.featuresNormalizationType.map(VectorColumnScalerNormalizer.applyInPlace(_, "features"))
+    val normalize = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
 
     // reduce the dimensionality if needed
     val reduceDim = setting.pcaDims.map(InPlacePCA(_))

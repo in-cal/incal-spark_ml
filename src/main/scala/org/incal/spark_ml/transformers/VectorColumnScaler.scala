@@ -5,19 +5,19 @@ import org.apache.spark.ml.feature.{MaxAbsScaler, MinMaxScaler, StandardScaler}
 import org.incal.spark_ml.models.VectorScalerType
 import org.incal.spark_ml.SparkUtil
 
-object VectorColumnScalerNormalizer {
+object VectorColumnScaler {
 
   def apply(
-    transformType: VectorScalerType.Value
+    scalerType: VectorScalerType.Value
   ): Estimator[_  <: Transformer] =
-    apply(transformType, "features", "scaledFeatures")
+    apply(scalerType, "features", "scaledFeatures")
 
   def applyInPlace(
-    transformType: VectorScalerType.Value,
+    scalerType: VectorScalerType.Value,
     inputOutputCol: String
   ): Estimator[PipelineModel] =
     SparkUtil.transformInPlace(
-      apply(transformType, inputOutputCol, _),
+      apply(scalerType, inputOutputCol, _),
       inputOutputCol
     )
 
