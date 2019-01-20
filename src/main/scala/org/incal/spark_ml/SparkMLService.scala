@@ -11,7 +11,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.slf4j.LoggerFactory
 import org.incal.spark_ml.transformers._
-import org.incal.spark_ml.models.{LearningSetting, ReservoirSpec}
+import org.incal.spark_ml.models.{LearningSetting, ReservoirSpec, VectorScalerType}
 import org.incal.spark_ml.models.classification.{Classification, ClassificationEvalMetric}
 import org.incal.spark_ml.models.regression.{Regression, RegressionEvalMetric}
 import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
@@ -30,7 +30,7 @@ trait SparkMLService {
   protected val logger = LoggerFactory.getLogger("ml")
 
   // consts
-  protected val defaultTrainingTestingSplit = 0.8
+  protected val defaultTrainingTestingSplitRatio = 0.8
   protected val defaultClassificationCrossValidationEvalMetric = ClassificationEvalMetric.accuracy
   protected val defaultRegressionCrossValidationEvalMetric = RegressionEvalMetric.rmse
   protected val seriesOrderCol = "index"
@@ -89,7 +89,7 @@ trait SparkMLService {
     val crossValidatorCreator = setting.crossValidationFolds.map(CrossValidatorFactory.withFolds)
 
     // data set training / test split
-    val split = randomSplit
+    val split = randomSplit(setting)
 
     // how to calculate test predictions
     val calcTestPredictions = independentTestPredictions
@@ -106,7 +106,8 @@ trait SparkMLService {
     reservoirSetting: Option[ReservoirSpec] = None,
     mlModel: Classification,
     setting: LearningSetting[ClassificationEvalMetric.Value],
-    minCrossValidationTrainingSize: Option[Double] = None,
+    minCrossValidationTrainingSizeRatio: Option[Double] = None,
+    trainingTestSplitOrderValue: Option[Double] = None,
     binCurvesNumBins: Option[Int] = None,
     groupIdCol: Option[String] = None
   ): Future[ClassificationResultsHolder] = {
@@ -116,11 +117,11 @@ trait SparkMLService {
 
     // forward-chaining cross validator
     val crossValidatorCreator = setting.crossValidationFolds.map(
-      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSize)
+      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSizeRatio)
     )
 
     // data set training / test split
-    val split = seqSplit(seriesOrderCol)
+    val split = seqSplit(setting.trainingTestSplitRatio, trainingTestSplitOrderValue)
 
     // how to calculate test predictions
     val calcTestPredictions = orderDependentTestPredictions(seriesOrderCol)
@@ -135,7 +136,7 @@ trait SparkMLService {
     mlModel: Classification,
     setting: LearningSetting[ClassificationEvalMetric.Value],
     binCurvesNumBins: Option[Int],
-    splitDataSet: Double => (DataFrame => (DataFrame, DataFrame)),
+    splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     initStages: Seq[() => PipelineStage],
@@ -156,7 +157,7 @@ trait SparkMLService {
     mlModel: Classification,
     setting: LearningSetting[ClassificationEvalMetric.Value],
     binCurvesNumBins: Option[Int],
-    splitDataset: Double => (DataFrame => (DataFrame, DataFrame)),
+    splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     stages: Seq[() => PipelineStage],
@@ -181,9 +182,6 @@ trait SparkMLService {
     val fullParamMaps = buildParamGrids(trainerParamGrids ++ paramGrids)
 
     // REPEAT THE TRAINING-TEST CYCLE
-
-    // split for the data into training and test parts
-    val splitRatio = setting.trainingTestingSplit.getOrElse(defaultTrainingTestingSplit)
 
     // evaluators
     val evaluators = classificationEvaluators ++ (if (outputSize == 2) binClassificationEvaluators else Nil)
@@ -210,7 +208,7 @@ trait SparkMLService {
         evaluators,
         crossValidationEvaluator.evaluator,
         crossValidatorCreator,
-        splitDataset(splitRatio),
+        splitDataset,
         calcTestPredictions,
         outputSize,
         count,
@@ -257,20 +255,21 @@ trait SparkMLService {
     df: DataFrame,
     replicationDf: Option[DataFrame] = None,
     mlModel: Regression,
-    setting: LearningSetting[RegressionEvalMetric.Value]
+    setting: LearningSetting[RegressionEvalMetric.Value],
+    outputNormalizationType: Option[VectorScalerType.Value] = None
   ): Future[RegressionResultsHolder] = {
 
     // k-folds cross-validator
     val crossValidatorCreator = setting.crossValidationFolds.map(CrossValidatorFactory.withFolds)
 
     // data set training / test split
-    val split = randomSplit
+    val split = randomSplit(setting)
 
     // how to calculate test predictions
     val calcTestPredictions = independentTestPredictions
 
     // regress
-    regressAux(df, replicationDf, mlModel, setting, split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil, false)
+    regressAux(df, replicationDf, mlModel, setting, outputNormalizationType, split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil, false)
   }
 
   def regressTimeSeries(
@@ -281,7 +280,9 @@ trait SparkMLService {
     reservoirSetting: Option[ReservoirSpec] = None,
     mlModel: Regression,
     setting: LearningSetting[RegressionEvalMetric.Value],
-    minCrossValidationTrainingSize: Option[Double] = None,
+    outputNormalizationType: Option[VectorScalerType.Value] = None,
+    minCrossValidationTrainingSizeRatio: Option[Double] = None,
+    trainingTestSplitOrderValue: Option[Double] = None,
     groupIdCol: Option[String] = None
   ): Future[RegressionResultsHolder] = {
     // time series transformers/stages
@@ -290,17 +291,17 @@ trait SparkMLService {
 
     // forward-chaining cross validator
     val crossValidatorCreator = setting.crossValidationFolds.map(
-      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSize)
+      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSizeRatio)
     )
 
     // data set training / test split
-    val split = seqSplit(seriesOrderCol)
+    val split = seqSplit(setting.trainingTestSplitRatio, trainingTestSplitOrderValue)
 
     // how to calculate test predictions
     val calcTestPredictions = orderDependentTestPredictions(seriesOrderCol)
 
     // regress with the time series transformers and a sequential split
-    regressAux(df, replicationDf, mlModel, setting, split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps, true)
+    regressAux(df, replicationDf, mlModel, setting, outputNormalizationType, split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps, true)
   }
 
   protected def regressAux(
@@ -308,7 +309,8 @@ trait SparkMLService {
     replicationDf: Option[DataFrame],
     mlModel: Regression,
     setting: LearningSetting[RegressionEvalMetric.Value],
-    splitDataSet: Double => (DataFrame => (DataFrame, DataFrame)),
+    outputNormalizationType: Option[VectorScalerType.Value],
+    splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     initStages: Seq[() => PipelineStage],
@@ -317,7 +319,7 @@ trait SparkMLService {
     collectOutputs: Boolean = false
   ): Future[RegressionResultsHolder] = {
     // stages
-    val coreStages = regressionStages(setting)
+    val coreStages = regressionStages(setting, outputNormalizationType)
     val stages = initStages ++ coreStages ++ preTrainingStages
 
     // regress with the stages
@@ -329,7 +331,7 @@ trait SparkMLService {
     replicationDf: Option[DataFrame],
     mlModel: Regression,
     setting: LearningSetting[RegressionEvalMetric.Value],
-    splitDataset: Double => (DataFrame => (DataFrame, DataFrame)),
+    splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     stages: Seq[() => PipelineStage],
@@ -342,9 +344,6 @@ trait SparkMLService {
     val fullParamMaps = buildParamGrids(trainerParamGrids ++ paramGrids)
 
     // REPEAT THE TRAINING-TEST CYCLE
-
-    // split ratio for the data into training and test parts
-    val splitRatio = setting.trainingTestingSplit.getOrElse(defaultTrainingTestingSplit)
 
     // cross-validation evaluator
     val crossValidationEvaluator =
@@ -367,7 +366,7 @@ trait SparkMLService {
         fullParamMaps,
         crossValidationEvaluator.evaluator,
         crossValidatorCreator,
-        splitDataset(splitRatio),
+        splitDataset,
         calcTestPredictions,
         df,
         Seq(replicationDf).flatten
@@ -453,6 +452,20 @@ trait SparkMLService {
 
     (stages, paramGrids)
   }
+
+  private def randomSplit(setting: LearningSetting[_]) =
+    MachineLearningUtil.randomSplit(setting.trainingTestSplitRatio.getOrElse(defaultTrainingTestingSplitRatio))
+
+  private def seqSplit(
+    trainingTestSplitRatio: Option[Double],
+    trainingTestSplitOrderValue: Option[Double]
+  ) =
+    if (trainingTestSplitOrderValue.isDefined)
+      MachineLearningUtil.splitByValue(seriesOrderCol)(trainingTestSplitOrderValue.get)
+    else if (trainingTestSplitRatio.isDefined)
+      MachineLearningUtil.seqSplit(seriesOrderCol)(trainingTestSplitRatio.get)
+    else
+      throw new IncalSparkMLException("trainingTestSplitRatio or trainingTestSplitOrderValue must be defined for a seq split.")
 
   private def buildParamGrids(
     paramGrids: Traversable[ParamGrid[_]]
@@ -566,16 +579,21 @@ trait SparkMLService {
   }
 
   private def regressionStages(
-    setting: LearningSetting[_]
+    setting: LearningSetting[_],
+    outputNormalizationType: Option[VectorScalerType.Value]
   ): Seq[() => PipelineStage] = {
+
     // normalize the features
-    val normalize = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
+    val normalizeFeatures = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
+
+    // normalize the output
+    val normalizeOutput = outputNormalizationType.map(NumericColumnScaler.applyInPlace(_, "label"))
 
     // reduce the dimensionality if needed
     val reduceDim = setting.pcaDims.map(InPlacePCA(_))
 
     // sequence the stages and return
-    Seq(normalize, reduceDim).flatten.map(() => _)
+    Seq(normalizeFeatures, reduceDim, normalizeOutput).flatten.map(() => _)
   }
 
   private def evaluate[Q](
@@ -668,6 +686,14 @@ trait SparkMLService {
       trainingDf.cache()
       testDf.cache()
 
+      if (setting.debugMode) {
+        println("Training:\n")
+        trainingDf.show(truncate = false)
+
+        println("Test:\n")
+        trainingDf.show(truncate = false)
+      }
+
       // fit the model to the training set
       val mlModel = estimator.fit(trainingDf).asInstanceOf[Transformer]
 
@@ -678,13 +704,14 @@ trait SparkMLService {
       val replicationPredictions = replicationDfs.map(mlModel.transform)
 
       logger.info("Obtained training/test predictions as: " + trainPredictions.count() + " / " + testPredictions.count())
-//      println("Training predictions min index  : " + trainPredictions.agg(min(trainPredictions("index"))).head.getInt(0))
-//      println("Training predictions max index  : " + trainPredictions.agg(max(trainPredictions("index"))).head.getInt(0))
-//      println("Test predictions min index      : " + testPredictions.agg(min(testPredictions("index"))).head.getInt(0))
-//      println("Test predictions max index      : " + testPredictions.agg(max(testPredictions("index"))).head.getInt(0))
 
-//      trainPredictions.show(false)
-//      testPredictions.show(false)
+      if (setting.debugMode) {
+        println("Training predictions:\n")
+        trainingDf.show(truncate = false)
+
+        println("Test predictions:\n")
+        trainingDf.show(truncate = false)
+      }
 
       // unpersist and return the predictions
       trainingDf.unpersist
@@ -708,5 +735,6 @@ trait SparkMLService {
 case class SparKMLServiceSetting(
   repetitionParallelism: Option[Int] = None,
   binaryClassifierInputName: Option[String] = None,
-  useConsecutiveOrderForDL: Option[Boolean] = None
+  useConsecutiveOrderForDL: Option[Boolean] = None,
+  debugMode: Boolean = false
 )

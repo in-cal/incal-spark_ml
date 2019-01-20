@@ -14,12 +14,13 @@ import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.sql.functions.{max, min}
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.sql.types.StructType
-
+import org.incal.spark_ml.IncalSparkMLException
 import org.incal.spark_ml.MachineLearningUtil.orderDependentTestPredictionsWithParams
+
 import scala.collection.JavaConverters._
 import org.json4s.DefaultFormats
 
-// TODO: could be substantially simplified if CrossValidator provides "splits" function, which can be overridden, plus the model is generic
+// TODO: could be substantially simplified if CrossValidator provides "splits" function that can be overridden, plus the model would need to be generic
 class ForwardChainingCrossValidator(override val uid: String)
   extends Estimator[ForwardChainingCrossValidatorModel]
     with CrossValidatorParams with MLWritable with Logging {
@@ -43,9 +44,9 @@ class ForwardChainingCrossValidator(override val uid: String)
 
   def setOrderCol(value: String): this.type = set(orderCol, value)
 
-  protected final val minTrainingSize: Param[Double] = new Param[Double](this, "minTrainingSize", "min training size", ParamValidators.gt(0))
+  protected final val minTrainingSizeRatio: Param[Double] = new Param[Double](this, "minTrainingSizeRatio", "min training size ratio", ParamValidators.inRange(0, 1))
 
-  def setMinTrainingSize(value: Double): this.type = set(minTrainingSize, value)
+  def setMinTrainingSizeRatio(value: Double): this.type = set(minTrainingSizeRatio, value)
 
   // can be removed
   private def splitFolds(dataset: Dataset[_]): Array[(Dataset[_], Dataset[_])] = {
@@ -61,14 +62,14 @@ class ForwardChainingCrossValidator(override val uid: String)
   }
 
   protected def splitForward(dataset: Dataset[_]):  Array[(Dataset[_], Dataset[_], Dataset[_])] = {
-    val stepSize = (1 - $(minTrainingSize)) / $(numFolds)
+    val stepSize = (1 - $(minTrainingSizeRatio)) / $(numFolds)
     val maxOrderValue = dataset.agg(max($(orderCol))).head.getInt(0)
 
     val splitValues = for (i <- 0 until $(numFolds)) yield
-      dataset.stat.approxQuantile($(orderCol), Array($(minTrainingSize) + i * stepSize), 0.001)(0)
+      dataset.stat.approxQuantile($(orderCol), Array($(minTrainingSizeRatio) + i * stepSize), 0.001)(0)
 
     splitValues.zip(splitValues.tail ++ Seq(maxOrderValue: Double)).map { case (trainingSplitValue, validationSplitValue) =>
-      println(trainingSplitValue + " - " + validationSplitValue)
+      println(s"Training <= $trainingSplitValue, validation > $trainingSplitValue && <= $validationSplitValue")
       val trainingSet = dataset.where(dataset($(orderCol)) <= trainingSplitValue)
       val validationSet = dataset.where(dataset($(orderCol)) > trainingSplitValue and dataset($(orderCol)) <= validationSplitValue)
       val fullSet = dataset.where(dataset($(orderCol)) <= validationSplitValue)
@@ -109,6 +110,8 @@ class ForwardChainingCrossValidator(override val uid: String)
       while (i < numModels) {
 //        val validationPredictions = models(i).transform(validationDataset, epm(i))
         val validationPredictions = calcTestPredictions(models(i), validationDataset, fullDataset, epm(i))
+        if (validationPredictions.count() == 0)
+          throw new IncalSparkMLException(s"Got no validation predictions for a forward-chaining cross validation. Perhaps the validation set with ${validationDataset.count} rows is too short.")
         val metric = eval.evaluate(validationPredictions)
         logDebug(s"Got metric $metric for model trained with ${epm(i)}.")
         metrics(i) += metric
@@ -189,7 +192,7 @@ object ForwardChainingCrossValidator extends MLReadable[ForwardChainingCrossVali
         .setSeed(seed)
         .setNumFolds(numFolds)
         .setOrderCol(orderCol)
-        .setMinTrainingSize(minTrainingSize)
+        .setMinTrainingSizeRatio(minTrainingSize)
     }
   }
 }

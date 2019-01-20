@@ -45,21 +45,21 @@ case class ClassificationSetting(
   mlModelId: BSONObjectID,
   outputFieldName: String,
   inputFieldNames: Seq[String],
-  filterId: Option[BSONObjectID],
-  featuresNormalizationType: Option[VectorScalerType.Value],
-  featuresSelectionNum: Option[Int],
-  pcaDims: Option[Int],
-  trainingTestingSplit: Option[Double],
-  replicationFilterId: Option[BSONObjectID],
+  filterId: Option[BSONObjectID] = None,
+  featuresNormalizationType: Option[VectorScalerType.Value] = None,
+  featuresSelectionNum: Option[Int] = None,
+  pcaDims: Option[Int] = None,
+  trainingTestSplitRatio: Option[Double] = None,
+  replicationFilterId: Option[BSONObjectID] = None,
   samplingRatios: Seq[(String, Double)],
-  repetitions: Option[Int],
-  crossValidationFolds: Option[Int],
-  crossValidationEvalMetric: Option[ClassificationEvalMetric.Value],
-  binCurvesNumBins: Option[Int]
+  repetitions: Option[Int] = None,
+  crossValidationFolds: Option[Int] = None,
+  crossValidationEvalMetric: Option[ClassificationEvalMetric.Value] = None,
+  binCurvesNumBins: Option[Int] = None
 ) {
   def fieldNamesToLoads =
     if (inputFieldNames.nonEmpty) (inputFieldNames ++ Seq(outputFieldName)).toSet.toSeq else Nil
 
   def learningSetting =
-    LearningSetting[ClassificationEvalMetric.Value](featuresNormalizationType, pcaDims, trainingTestingSplit, samplingRatios, repetitions, crossValidationFolds, crossValidationEvalMetric)
+    LearningSetting[ClassificationEvalMetric.Value](featuresNormalizationType, pcaDims, trainingTestSplitRatio, samplingRatios, repetitions, crossValidationFolds, crossValidationEvalMetric)
 }

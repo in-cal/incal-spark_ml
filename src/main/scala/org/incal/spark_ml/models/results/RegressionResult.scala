@@ -31,7 +31,7 @@ case class RegressionSetting(
   featuresNormalizationType: Option[VectorScalerType.Value],
 //  featuresSelectionNum: Option[Int],
   pcaDims: Option[Int],
-  trainingTestingSplit: Option[Double],
+  trainingTestSplitRatio: Option[Double],
   replicationFilterId: Option[BSONObjectID],
 //  samplingRatios: Seq[(String, Double)],
   repetitions: Option[Int],
@@ -42,5 +42,5 @@ case class RegressionSetting(
     if (inputFieldNames.nonEmpty) (inputFieldNames ++ Seq(outputFieldName)).toSet.toSeq else Nil
 
   def learningSetting =
-    LearningSetting[RegressionEvalMetric.Value](featuresNormalizationType, pcaDims, trainingTestingSplit, Nil, repetitions, crossValidationFolds, crossValidationEvalMetric)
+    LearningSetting[RegressionEvalMetric.Value](featuresNormalizationType, pcaDims, trainingTestSplitRatio, Nil, repetitions, crossValidationFolds, crossValidationEvalMetric)
 }

@@ -21,7 +21,7 @@ object CrossValidatorFactory {
 
   def withForwardChaining(
     orderCol: String,
-    minTrainingSize: Option[Double])(
+    minTrainingSizeRatio: Option[Double])(
     folds: Int
   ): CrossValidatorCreator =
     (trainer: Estimator[_], paramMaps: Array[ParamMap], crossValidationEvaluator: Evaluator) =>
@@ -31,5 +31,5 @@ object CrossValidatorFactory {
         .setEvaluator(crossValidationEvaluator)
         .setNumFolds(folds)
         .setOrderCol(orderCol)
-        .setMinTrainingSize(minTrainingSize.getOrElse(1d / (folds + 1)))
+        .setMinTrainingSizeRatio(minTrainingSizeRatio.getOrElse(1d / (folds + 1)))
 }
