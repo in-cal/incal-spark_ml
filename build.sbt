@@ -2,7 +2,7 @@ organization := "org.in-cal"
 
 name := "incal-spark_ml"
 
-version := "0.0.7"
+version := "0.0.9"
 
 description := "Extension of Spark ML library for the temporal domain with a lot of handy transformers, classification and regression models, and a convenient customizable pipeline execution."
 

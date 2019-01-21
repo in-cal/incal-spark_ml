@@ -42,15 +42,18 @@ case class BinaryClassificationCurves(
 )
 
 case class ClassificationSetting(
-  mlModelId: BSONObjectID,
-  outputFieldName: String,
+  // IO
   inputFieldNames: Seq[String],
+  outputFieldName: String,
   filterId: Option[BSONObjectID] = None,
+  replicationFilterId: Option[BSONObjectID] = None,
+
+  // Learning setting
+  mlModelId: BSONObjectID,
   featuresNormalizationType: Option[VectorScalerType.Value] = None,
   featuresSelectionNum: Option[Int] = None,
   pcaDims: Option[Int] = None,
   trainingTestSplitRatio: Option[Double] = None,
-  replicationFilterId: Option[BSONObjectID] = None,
   samplingRatios: Seq[(String, Double)],
   repetitions: Option[Int] = None,
   crossValidationFolds: Option[Int] = None,

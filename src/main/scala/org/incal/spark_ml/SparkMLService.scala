@@ -25,7 +25,7 @@ import scala.concurrent.Future
 trait SparkMLService {
 
   val rcStatesWindowFactory: RCStatesWindowFactory
-  val setting: SparKMLServiceSetting
+  val setting: SparkMLServiceSetting
 
   protected val logger = LoggerFactory.getLogger("ml")
 
@@ -687,11 +687,11 @@ trait SparkMLService {
       testDf.cache()
 
       if (setting.debugMode) {
-        println("Training:\n")
+        println("Training Data Set:\n")
         trainingDf.show(truncate = false)
 
-        println("Test:\n")
-        trainingDf.show(truncate = false)
+        println("Test Data Set:\n")
+        testDf.show(truncate = false)
       }
 
       // fit the model to the training set
@@ -699,25 +699,25 @@ trait SparkMLService {
 
       // get the predictions for the training, test and replication data sets
 
-      val trainPredictions = mlModel.transform(trainingDf)
+      val trainingPredictions = mlModel.transform(trainingDf)
       val testPredictions = calcTestPredictions(mlModel, testDf, mainDf)
       val replicationPredictions = replicationDfs.map(mlModel.transform)
 
-      logger.info("Obtained training/test predictions as: " + trainPredictions.count() + " / " + testPredictions.count())
+      logger.info("Obtained training/test predictions as: " + trainingPredictions.count() + " / " + testPredictions.count())
 
       if (setting.debugMode) {
-        println("Training predictions:\n")
-        trainingDf.show(truncate = false)
+        println("Training Predictions:\n")
+        trainingPredictions.show(truncate = false)
 
-        println("Test predictions:\n")
-        trainingDf.show(truncate = false)
+        println("Test Predictions:\n")
+        testPredictions.show(truncate = false)
       }
 
       // unpersist and return the predictions
       trainingDf.unpersist
       testDf.unpersist
 
-      (trainPredictions, testPredictions, replicationPredictions)
+      (trainingPredictions, testPredictions, replicationPredictions)
     }
 
     // use cross-validation if the folds specified together with params to search through, and train
@@ -732,7 +732,7 @@ trait SparkMLService {
   case class EvaluatorWrapper[Q](metric: Q, evaluator: Evaluator)
 }
 
-case class SparKMLServiceSetting(
+case class SparkMLServiceSetting(
   repetitionParallelism: Option[Int] = None,
   binaryClassifierInputName: Option[String] = None,
   useConsecutiveOrderForDL: Option[Boolean] = None,

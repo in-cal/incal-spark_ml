@@ -24,19 +24,22 @@ case class RegressionMetricStats(
 )
 
 case class RegressionSetting(
-  mlModelId: BSONObjectID,
-  outputFieldName: String,
+  // IO
   inputFieldNames: Seq[String],
-  filterId: Option[BSONObjectID],
-  featuresNormalizationType: Option[VectorScalerType.Value],
-//  featuresSelectionNum: Option[Int],
+  outputFieldName: String,
+  filterId: Option[BSONObjectID] = None,
+  replicationFilterId: Option[BSONObjectID] = None,
+
+  // Learning setting
+  mlModelId: BSONObjectID,
+  featuresNormalizationType: Option[VectorScalerType.Value] = None,
+  outputNormalizationType: Option[VectorScalerType.Value] = None,
   pcaDims: Option[Int],
-  trainingTestSplitRatio: Option[Double],
-  replicationFilterId: Option[BSONObjectID],
-//  samplingRatios: Seq[(String, Double)],
-  repetitions: Option[Int],
-  crossValidationFolds: Option[Int],
-  crossValidationEvalMetric: Option[RegressionEvalMetric.Value]
+  trainingTestSplitRatio: Option[Double] = None,
+  trainingTestSplitOrderValue: Option[Double] = None,
+  repetitions: Option[Int] = None,
+  crossValidationFolds: Option[Int] = None,
+  crossValidationEvalMetric: Option[RegressionEvalMetric.Value] = None
 ) {
   def fieldNamesToLoads =
     if (inputFieldNames.nonEmpty) (inputFieldNames ++ Seq(outputFieldName)).toSet.toSeq else Nil
