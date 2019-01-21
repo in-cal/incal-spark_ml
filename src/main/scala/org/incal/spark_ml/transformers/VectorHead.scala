@@ -35,15 +35,15 @@ private class VectorHead(override val uid: String) extends Transformer with Defa
     val inputColName = $(inputCol)
     val outputColName = $(outputCol)
 
-    require(schema(inputColName).dataType.isInstanceOf[NumericType],
-      s"Input column must be of type NumericType but got ${schema(inputColName).dataType}")
+    require(schema(inputColName).dataType.typeName == "vector",
+      s"Input column must be of type Vector but got ${schema(inputColName).dataType}")
 
     val existingFields = schema.fields
 
     require(!existingFields.exists(_.name == outputColName),
       s"Output column $outputColName already exists.")
 
-    schema.add(StructField(outputColName, ArrayType(DoubleType), true))
+    schema.add(StructField(outputColName, DoubleType, true))
   }
 }
 

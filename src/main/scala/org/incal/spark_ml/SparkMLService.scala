@@ -596,16 +596,19 @@ trait SparkMLService {
     Seq(normalizeFeatures, reduceDim, normalizeOutput).flatten.map(() => _)
   }
 
-  private def evaluate[Q](
+  protected def evaluate[Q](
     evaluatorWrappers: Traversable[EvaluatorWrapper[Q]],
     trainPredictions: DataFrame,
     testPredictions: Seq[DataFrame]
   ): Traversable[(Q, Double, Seq[Double])] =
     evaluatorWrappers.flatMap { case EvaluatorWrapper(metric, evaluator) =>
       try {
-        val trainValue = evaluator.evaluate(trainPredictions)
-        val testValues = testPredictions.map(evaluator.evaluate)
-        Some((metric, trainValue, testValues))
+        def evalNonEmpty(df: DataFrame) = if (df.count() > 0) Some(evaluator.evaluate(df)) else None
+
+        val trainValue = evalNonEmpty(trainPredictions)
+        val testValues = testPredictions.flatMap(evalNonEmpty)
+
+        trainValue.map(trainValue => (metric, trainValue, testValues))
       } catch {
         case e: Exception =>
           val fieldNamesString = trainPredictions.schema.fieldNames.mkString(", ") + "\n"
@@ -687,10 +690,10 @@ trait SparkMLService {
       testDf.cache()
 
       if (setting.debugMode) {
-        println("Training Data Set:\n")
+        println(s"Training Data Set (#${trainingDf.count}):\n")
         trainingDf.show(truncate = false)
 
-        println("Test Data Set:\n")
+        println(s"Test Data Set (#${testDf.count}):\n")
         testDf.show(truncate = false)
       }
 
@@ -706,10 +709,10 @@ trait SparkMLService {
       logger.info("Obtained training/test predictions as: " + trainingPredictions.count() + " / " + testPredictions.count())
 
       if (setting.debugMode) {
-        println("Training Predictions:\n")
+        println(s"Training Predictions (# ${trainingPredictions.count}):\n")
         trainingPredictions.show(truncate = false)
 
-        println("Test Predictions:\n")
+        println(s"Test Predictions (# ${testPredictions.count}):\n")
         testPredictions.show(truncate = false)
       }
 

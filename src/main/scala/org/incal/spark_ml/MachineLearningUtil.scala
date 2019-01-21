@@ -37,14 +37,22 @@ object MachineLearningUtil {
   val orderDependentTestPredictions = (orderColumn: String) =>
     (mlModel: Transformer, testDf: Dataset[_], mainDf: Dataset[_]) => {
       val allPredictions = mlModel.transform(mainDf)
-      val minTestIndexVal = testDf.agg(min(testDf(orderColumn))).head.getInt(0)
+
+      // either extract a min test index value or if empty return +infinity which will produce empty predictions
+      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head(1).headOption
+      val minTestIndexVal = minTestIndexRow.map(_.getInt(0)).getOrElse(Int.MaxValue)
+
       allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
     }
 
   val orderDependentTestPredictionsWithParams = (orderColumn: String) =>
     (mlModel: Transformer, testDf: Dataset[_], mainDf: Dataset[_], paramMap: ParamMap) => {
       val allPredictions = mlModel.transform(mainDf, paramMap)
-      val minTestIndexVal = testDf.agg(min(testDf(orderColumn))).head.getInt(0)
+
+      // either extract a min test index value or if empty return +infinity which will produce empty predictions
+      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head(1).headOption
+      val minTestIndexVal = minTestIndexRow.map(_.getInt(0)).getOrElse(Int.MaxValue)
+
       allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
     }
 

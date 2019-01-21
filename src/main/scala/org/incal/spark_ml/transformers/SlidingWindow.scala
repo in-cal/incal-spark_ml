@@ -34,9 +34,7 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
   def setOutputCol(value: String): this.type = set(outputCol, value)
   def setGroupCol(value: Option[String]) = value.map(set(groupCol, _)).getOrElse(SlidingWindow.this)
 
-  private val flattenVectors = udf {
-    assembleVectors(_: Seq[Vector])
-  }
+  private val flattenVectors = udf { assembleVectors(_: Seq[Vector]) }
 
   private def seqSizeEq(size: Int) = udf { seq: Seq[_] => seq.size == size }
 
