@@ -1,4 +1,4 @@
-package org.incal.spark_ml.models.results
+package org.incal.spark_ml.models.result
 
 import org.incal.spark_ml.models.regression.RegressionEvalMetric
 

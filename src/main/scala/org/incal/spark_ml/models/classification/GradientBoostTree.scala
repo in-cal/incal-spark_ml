@@ -17,7 +17,7 @@ case class GradientBoostTree(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends Classification
+) extends ClassificationModel
 
 object GBTClassificationLossType extends Enumeration {
   val logistic = Value

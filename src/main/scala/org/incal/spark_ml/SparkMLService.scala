@@ -11,13 +11,13 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.slf4j.LoggerFactory
 import org.incal.spark_ml.transformers._
-import org.incal.spark_ml.models.{LearningSetting, ReservoirSpec, VectorScalerType}
-import org.incal.spark_ml.models.classification.{Classification, ClassificationEvalMetric}
-import org.incal.spark_ml.models.regression.{Regression, RegressionEvalMetric}
+import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, ClassificationModel}
+import org.incal.spark_ml.models.regression.{RegressionEvalMetric, RegressionModel}
 import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
 import org.incal.spark_ml.MachineLearningUtil._
-import org.incal.spark_ml.models.results._
+import org.incal.spark_ml.models.result._
 import org.incal.core.util.{STuple3, parallelize}
+import org.incal.spark_ml.models.setting._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -79,10 +79,9 @@ trait SparkMLService {
 
   def classify(
     df: DataFrame,
-    replicationDf: Option[DataFrame] = None,
-    mlModel: Classification,
-    setting: LearningSetting[ClassificationEvalMetric.Value],
-    binCurvesNumBins: Option[Int] = None
+    mlModel: ClassificationModel,
+    setting: ClassificationLearningSetting = ClassificationLearningSetting(),
+    replicationDf: Option[DataFrame] = None
   ): Future[ClassificationResultsHolder]  = {
 
     // k-folds cross validator
@@ -95,47 +94,47 @@ trait SparkMLService {
     val calcTestPredictions = independentTestPredictions
 
     // classify with a random split
-    classifyAux(df, replicationDf, mlModel, setting, binCurvesNumBins, split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil)
+    classifyAux(
+      df, replicationDf, mlModel, setting
+    )(
+      split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil
+    )
   }
 
   def classifyTimeSeries(
     df: DataFrame,
-    replicationDf: Option[DataFrame] = None,
-    predictAhead: Int,
-    windowSize: Option[Int] = None,
-    reservoirSetting: Option[ReservoirSpec] = None,
-    mlModel: Classification,
-    setting: LearningSetting[ClassificationEvalMetric.Value],
-    minCrossValidationTrainingSizeRatio: Option[Double] = None,
-    trainingTestSplitOrderValue: Option[Double] = None,
-    binCurvesNumBins: Option[Int] = None,
-    groupIdCol: Option[String] = None
+    mlModel: ClassificationModel,
+    setting: TemporalClassificationLearningSetting,
+    replicationDf: Option[DataFrame] = None
   ): Future[ClassificationResultsHolder] = {
 
     // time series transformers/stages
-    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead, groupIdCol)
+    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(setting)
 
     // forward-chaining cross validator
-    val crossValidatorCreator = setting.crossValidationFolds.map(
-      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSizeRatio)
+    val crossValidatorCreator = setting.core.crossValidationFolds.map(
+      CrossValidatorFactory.withForwardChaining(seriesOrderCol, setting.minCrossValidationTrainingSizeRatio)
     )
 
     // data set training / test split
-    val split = seqSplit(setting.trainingTestSplitRatio, trainingTestSplitOrderValue)
+    val split = seqSplit(setting.core.trainingTestSplitRatio, setting.trainingTestSplitOrderValue)
 
     // how to calculate test predictions
     val calcTestPredictions = orderDependentTestPredictions(seriesOrderCol)
 
     // classify with the time-series transformers and a sequential split
-    classifyAux(df, replicationDf, mlModel, setting, binCurvesNumBins, split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramGrids)
+    classifyAux(
+      df, replicationDf, mlModel, setting.core
+    )(
+      split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramGrids
+    )
   }
 
-  private def classifyAux(
+  protected def classifyAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: Classification,
-    setting: LearningSetting[ClassificationEvalMetric.Value],
-    binCurvesNumBins: Option[Int],
+    mlModel: ClassificationModel,
+    setting: ClassificationLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
@@ -148,15 +147,18 @@ trait SparkMLService {
     val stages = initStages ++ coreStages ++ preTrainingStages
 
     // classify with the stages
-    classifyAux(df, replicationDf, mlModel, setting, binCurvesNumBins, splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids)
+    classifyWithStages(
+      df, replicationDf, mlModel, setting
+    )(
+      splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
+    )
   }
 
-  protected def classifyAux(
+  protected def classifyWithStages(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: Classification,
-    setting: LearningSetting[ClassificationEvalMetric.Value],
-    binCurvesNumBins: Option[Int],
+    mlModel: ClassificationModel,
+    setting: ClassificationLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
@@ -212,7 +214,7 @@ trait SparkMLService {
         calcTestPredictions,
         outputSize,
         count,
-        binCurvesNumBins,
+        setting.binCurvesNumBins,
         df,
         replicationDf
       )
@@ -230,8 +232,11 @@ trait SparkMLService {
       val results = resultHolders.flatMap(_.evalResults)
       val performanceResults = results.groupBy(_._1).map { case (evalMetric, results) =>
         ClassificationPerformance(evalMetric, results.map { case (_, trainResult, testResults) =>
-          val replicationResult = testResults.tail.headOption
-          (trainResult, testResults.head, replicationResult)
+          testResults.headOption.map(testResult =>
+            (trainResult, Some(testResult): Option[Double], testResults.tail.headOption)
+          ).getOrElse(
+            (trainResult, None, None)
+          )
         })
       }
 
@@ -253,10 +258,9 @@ trait SparkMLService {
 
   def regress(
     df: DataFrame,
-    replicationDf: Option[DataFrame] = None,
-    mlModel: Regression,
-    setting: LearningSetting[RegressionEvalMetric.Value],
-    outputNormalizationType: Option[VectorScalerType.Value] = None
+    mlModel: RegressionModel,
+    setting: RegressionLearningSetting = RegressionLearningSetting(),
+    replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
 
     // k-folds cross-validator
@@ -269,74 +273,76 @@ trait SparkMLService {
     val calcTestPredictions = independentTestPredictions
 
     // regress
-    regressAux(df, replicationDf, mlModel, setting, outputNormalizationType, split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil, false)
+    regressAux(
+      df, replicationDf, mlModel, setting
+    )(
+      split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil
+    )
   }
 
   def regressTimeSeries(
     df: DataFrame,
-    replicationDf: Option[DataFrame] = None,
-    predictAhead: Int,
-    windowSize: Option[Int] = None,
-    reservoirSetting: Option[ReservoirSpec] = None,
-    mlModel: Regression,
-    setting: LearningSetting[RegressionEvalMetric.Value],
-    outputNormalizationType: Option[VectorScalerType.Value] = None,
-    minCrossValidationTrainingSizeRatio: Option[Double] = None,
-    trainingTestSplitOrderValue: Option[Double] = None,
-    groupIdCol: Option[String] = None
+    mlModel: RegressionModel,
+    setting: TemporalRegressionLearningSetting,
+    replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
     // time series transformers/stages
-    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(windowSize, reservoirSetting, predictAhead, groupIdCol)
+    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(setting)
     //    val showDf = SchemaUnchangedTransformer { df: DataFrame => df.orderBy(seriesOrderCol).show(false); df }
 
     // forward-chaining cross validator
-    val crossValidatorCreator = setting.crossValidationFolds.map(
-      CrossValidatorFactory.withForwardChaining(seriesOrderCol, minCrossValidationTrainingSizeRatio)
+    val crossValidatorCreator = setting.core.crossValidationFolds.map(
+      CrossValidatorFactory.withForwardChaining(seriesOrderCol, setting.minCrossValidationTrainingSizeRatio)
     )
 
     // data set training / test split
-    val split = seqSplit(setting.trainingTestSplitRatio, trainingTestSplitOrderValue)
+    val split = seqSplit(setting.core.trainingTestSplitRatio, setting.trainingTestSplitOrderValue)
 
     // how to calculate test predictions
     val calcTestPredictions = orderDependentTestPredictions(seriesOrderCol)
 
     // regress with the time series transformers and a sequential split
-    regressAux(df, replicationDf, mlModel, setting, outputNormalizationType, split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps, true)
+    regressAux(
+      df, replicationDf, mlModel, setting.core
+    )(
+      split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps
+    )
   }
 
   protected def regressAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: Regression,
-    setting: LearningSetting[RegressionEvalMetric.Value],
-    outputNormalizationType: Option[VectorScalerType.Value],
+    mlModel: RegressionModel,
+    setting: RegressionLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     initStages: Seq[() => PipelineStage],
     preTrainingStages: Seq[() => PipelineStage],
-    paramGrids: Traversable[ParamGrid[_]] = Nil,
-    collectOutputs: Boolean = false
+    paramGrids: Traversable[ParamGrid[_]]
   ): Future[RegressionResultsHolder] = {
     // stages
-    val coreStages = regressionStages(setting, outputNormalizationType)
+    val coreStages = regressionStages(setting)
     val stages = initStages ++ coreStages ++ preTrainingStages
 
     // regress with the stages
-    regressAux(df, replicationDf, mlModel, setting, splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids, collectOutputs)
+    regressWithStages(
+      df, replicationDf, mlModel, setting
+    )(
+      splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
+    )
   }
 
-  private def regressAux(
+  protected def regressWithStages(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: Regression,
-    setting: LearningSetting[RegressionEvalMetric.Value],
+    mlModel: RegressionModel,
+    setting: RegressionLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     crossValidatorCreator: Option[CrossValidatorCreator],
     stages: Seq[() => PipelineStage],
-    paramGrids: Traversable[ParamGrid[_]],
-    collectOutputs: Boolean
+    paramGrids: Traversable[ParamGrid[_]]
   ): Future[RegressionResultsHolder] = {
     // CREATE A TRAINER
 
@@ -377,7 +383,7 @@ trait SparkMLService {
 
       // collect the actual vs expected outputs (if needed)
       val outputs: Traversable[Seq[(Double, Double)]] =
-        if (collectOutputs) {
+        if (setting.collectOutputs) {
           val trainingOutputs = collectLabelPredictions(trainPredictions)
           val testOutputs = collectLabelPredictions(testPredictions)
           Seq(trainingOutputs, testOutputs)
@@ -399,8 +405,11 @@ trait SparkMLService {
       val results = resultHolders.flatMap(_.evalResults)
       val performanceResults = results.groupBy(_._1).map { case (evalMetric, results) =>
         RegressionPerformance(evalMetric, results.map { case (_, trainResult, testResults) =>
-          val replicationResult = testResults.tail.headOption
-          (trainResult, testResults.head, replicationResult)
+          testResults.headOption.map(testResult =>
+            (trainResult, Some(testResult): Option[Double], testResults.tail.headOption)
+          ).getOrElse(
+            (trainResult, None, None)
+          )
         })
       }
 
@@ -414,35 +423,32 @@ trait SparkMLService {
     }
   }
 
-  private def createTimeSeriesStagesWithParamGrids(
-    windowSize: Option[Int],
-    reservoirSetting: Option[ReservoirSpec],
-    labelShift: Int,
-    groupCol: Option[String] = None
+  protected def createTimeSeriesStagesWithParamGrids(
+    setting: TemporalLearningSetting
   ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]]) = {
-    if (windowSize.isEmpty && reservoirSetting.isEmpty)
-      logger.warn("Window size or reservoir setting should be set for time series transformations.")
+    if (setting.slidingWindowSize.isEmpty && setting.reservoirSetting.isEmpty)
+      logger.warn("Sliding window size or reservoir setting should be set for time series transformations.")
 
-    val dlTransformer = windowSize.map(
+    val dlTransformer = setting.slidingWindowSize.map(
       if (useConsecutiveOrderForDL)
-        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, groupCol)
+        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, setting.groupIdColumnName)
       else
-        SlidingWindow.applyInPlace("features", seriesOrderCol, groupCol)
+        SlidingWindow.applyInPlace("features", seriesOrderCol, setting.groupIdColumnName)
     )
 
-    if (reservoirSetting.isDefined && groupCol.isDefined)
-      throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${groupCol.get}, which is currently unsupported.")
+    if (setting.reservoirSetting.isDefined && setting.groupIdColumnName.isDefined)
+      throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${setting.groupIdColumnName.get}, which is currently unsupported.")
 
-    val rcTransformerWithParamGrids = reservoirSetting.map(rcStatesWindowFactory.applyInPlace("features", seriesOrderCol))
+    val rcTransformerWithParamGrids = setting.reservoirSetting.map(rcStatesWindowFactory.applyInPlace("features", seriesOrderCol))
 
     val rcTransformer = rcTransformerWithParamGrids.map(_._1)
     val paramGrids = rcTransformerWithParamGrids.map(_._2).getOrElse(Nil)
 
     val labelShiftTransformer =
       if (useConsecutiveOrderForDL)
-        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, groupCol)(labelShift)
+        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, setting.groupIdColumnName)(setting.predictAhead)
       else
-        SeqShift.applyInPlace("label", seriesOrderCol, groupCol)(labelShift)
+        SeqShift.applyInPlace("label", seriesOrderCol, setting.groupIdColumnName)(setting.predictAhead)
 
     val stages = Seq(
       dlTransformer.map(() => _),
@@ -558,8 +564,8 @@ trait SparkMLService {
     ClassificationResultsAuxHolder(results, count, binTrainingCurves, binTestCurves)
   }
 
-  private def classificationStages(
-    setting: LearningSetting[_]
+  protected def classificationStages(
+    setting: ClassificationLearningSetting
   ): Seq[() => PipelineStage] = {
     // normalize the features
     val normalize = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
@@ -578,16 +584,15 @@ trait SparkMLService {
     if (setting.samplingRatios.nonEmpty) preStages ++ Seq(keepLabelString, sample) else preStages
   }
 
-  private def regressionStages(
-    setting: LearningSetting[_],
-    outputNormalizationType: Option[VectorScalerType.Value]
+  protected def regressionStages(
+    setting: RegressionLearningSetting
   ): Seq[() => PipelineStage] = {
 
     // normalize the features
     val normalizeFeatures = setting.featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
 
     // normalize the output
-    val normalizeOutput = outputNormalizationType.map(NumericColumnScaler.applyInPlace(_, "label"))
+    val normalizeOutput = setting.outputNormalizationType.map(NumericColumnScaler.applyInPlace(_, "label"))
 
     // reduce the dimensionality if needed
     val reduceDim = setting.pcaDims.map(InPlacePCA(_))
@@ -690,10 +695,10 @@ trait SparkMLService {
       testDf.cache()
 
       if (setting.debugMode) {
-        println(s"Training Data Set (#${trainingDf.count}):\n")
+        println(s"Training Data Set (# ${trainingDf.count}):\n")
         trainingDf.show(truncate = false)
 
-        println(s"Test Data Set (#${testDf.count}):\n")
+        println(s"Test Data Set (# ${testDf.count}):\n")
         testDf.show(truncate = false)
       }
 

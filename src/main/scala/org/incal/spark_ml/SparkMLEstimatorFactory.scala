@@ -1,7 +1,7 @@
 package org.incal.spark_ml
 
-import org.incal.spark_ml.models.classification.{Classification, DecisionTree, GradientBoostTree, LinearSupportVectorMachine, LogisticRegression, MultiLayerPerceptron, NaiveBayes, RandomForest}
-import org.incal.spark_ml.models.regression.{Regression, GeneralizedLinearRegression => GeneralizedLinearRegressionDef, GradientBoostRegressionTree => GradientBoostRegressionTreeDef, LinearRegression => LinearRegressionDef, RandomRegressionForest => RandomRegressionForestDef, RegressionTree => RegressionTreeDef}
+import org.incal.spark_ml.models.classification.{ClassificationModel, DecisionTree, GradientBoostTree, LinearSupportVectorMachine, LogisticRegression, MultiLayerPerceptron, NaiveBayes, RandomForest}
+import org.incal.spark_ml.models.regression.{RegressionModel, GeneralizedLinearRegression => GeneralizedLinearRegressionDef, GradientBoostRegressionTree => GradientBoostRegressionTreeDef, LinearRegression => LinearRegressionDef, RandomRegressionForest => RandomRegressionForestDef, RegressionTree => RegressionTreeDef}
 import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.classification.{LogisticRegression => LogisticRegressionClassifier, NaiveBayes => NaiveBayesClassifier, _}
 import org.apache.spark.ml.regression.{DecisionTreeRegressor, GBTRegressor, RandomForestRegressor, GeneralizedLinearRegression => GeneralizedLinearRegressor, LinearRegression => LinearRegressor}
@@ -13,7 +13,7 @@ import org.incal.spark_ml.{ParamGrid, ParamSourceBinder}
 object SparkMLEstimatorFactory extends SparkMLEstimatorFactoryHelper {
 
   def apply[M <: Model[M]](
-    model: Classification,
+    model: ClassificationModel,
     inputSize: Int,
     outputSize: Int
   ): (Estimator[M], Traversable[ParamGrid[_]]) = {
@@ -31,7 +31,7 @@ object SparkMLEstimatorFactory extends SparkMLEstimatorFactoryHelper {
   }
 
   def apply[M <: Model[M]](
-    model: Regression
+    model: RegressionModel
   ): (Estimator[M], Traversable[ParamGrid[_]]) = {
     val (estimator, paramMaps) = model match {
       case x: LinearRegressionDef => applyAux(x)

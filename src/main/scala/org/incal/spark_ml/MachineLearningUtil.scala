@@ -5,11 +5,11 @@ import org.apache.spark.ml.Transformer
 import org.apache.spark.ml.param.ParamMap
 import org.apache.spark.sql.{DataFrame, Dataset}
 import org.apache.spark.sql.functions.min
-import org.incal.spark_ml.models.results._
-import org.incal.spark_ml.IncalSparkMLException
+import org.incal.spark_ml.models.result._
 import org.incal.spark_ml.models.classification.ClassificationEvalMetric
 import org.incal.spark_ml.models.regression.RegressionEvalMetric
 import org.incal.core.util.STuple3
+import org.incal.spark_ml.models.setting.{ClassificationRunSpec, RegressionRunSpec}
 
 object MachineLearningUtil {
 
@@ -39,8 +39,8 @@ object MachineLearningUtil {
       val allPredictions = mlModel.transform(mainDf)
 
       // either extract a min test index value or if empty return +infinity which will produce empty predictions
-      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head(1).headOption
-      val minTestIndexVal = minTestIndexRow.map(_.getInt(0)).getOrElse(Int.MaxValue)
+      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head()
+      val minTestIndexVal = if (!minTestIndexRow.isNullAt(0)) minTestIndexRow.getInt(0) else Int.MaxValue
 
       allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
     }
@@ -50,13 +50,13 @@ object MachineLearningUtil {
       val allPredictions = mlModel.transform(mainDf, paramMap)
 
       // either extract a min test index value or if empty return +infinity which will produce empty predictions
-      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head(1).headOption
-      val minTestIndexVal = minTestIndexRow.map(_.getInt(0)).getOrElse(Int.MaxValue)
+      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head()
+      val minTestIndexVal = if (!minTestIndexRow.isNullAt(0)) minTestIndexRow.getInt(0) else Int.MaxValue
 
       allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
     }
 
-  def calcMetricStats[T <: Enumeration#Value](results: Traversable[Performance[T]]): Map[T, (MetricStatsValues, MetricStatsValues, Option[MetricStatsValues])] =
+  def calcMetricStats[T <: Enumeration#Value](results: Traversable[Performance[T]]): Map[T, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])] =
     results.map { result =>
       val trainingStats = new SummaryStatistics
       val testStats = new SummaryStatistics
@@ -64,18 +64,19 @@ object MachineLearningUtil {
 
       result.trainingTestReplicationResults.foreach { case (trainValue, testValue, replicationValue) =>
         trainingStats.addValue(trainValue)
-        testStats.addValue(testValue)
+        if (testValue.isDefined)
+          testStats.addValue(testValue.get)
         if (replicationValue.isDefined)
           replicationStats.addValue(replicationValue.get)
       }
 
       val sortedTrainValues = result.trainingTestReplicationResults.map(_._1).toSeq.sorted
-      val sortedTestValues = result.trainingTestReplicationResults.map(_._2).toSeq.sorted
+      val sortedTestValues = result.trainingTestReplicationResults.flatMap(_._2).toSeq.sorted
       val sortedReplicationValues = result.trainingTestReplicationResults.flatMap(_._3).toSeq.sorted
 
       (result.evalMetric, (
         toStats(trainingStats, median(sortedTrainValues)),
-        toStats(testStats, median(sortedTestValues)),
+        if (testStats.getN > 0) Some(toStats(testStats, median(sortedTestValues))) else None,
         if (replicationStats.getN > 0) Some(toStats(replicationStats, median(sortedReplicationValues))) else None
       ))
     }.toMap
@@ -95,19 +96,15 @@ object MachineLearningUtil {
     MetricStatsValues(summaryStatistics.getMean, summaryStatistics.getMin, summaryStatistics.getMax, summaryStatistics.getVariance, Some(median))
 
   def createClassificationResult(
-    setting: ClassificationSetting,
+    spec: ClassificationRunSpec,
     results: Traversable[ClassificationPerformance],
     binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]]
   ): ClassificationResult =
-    createClassificationResult(
-      setting,
-      calcMetricStats(results),
-      binCurves
-    )
+    createClassificationResult(spec, calcMetricStats(results), binCurves)
 
   def createClassificationResult(
-    setting: ClassificationSetting,
-    evalMetricStatsMap: Map[ClassificationEvalMetric.Value, (MetricStatsValues, MetricStatsValues, Option[MetricStatsValues])],
+    spec: ClassificationRunSpec,
+    evalMetricStatsMap: Map[ClassificationEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])],
     binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]]
   ): ClassificationResult = {
     // helper functions
@@ -115,7 +112,7 @@ object MachineLearningUtil {
       evalMetricStatsMap.get(metric).map(_._1)
 
     def testStatsOptional(metric: ClassificationEvalMetric.Value) =
-      evalMetricStatsMap.get(metric).map(_._2)
+      evalMetricStatsMap.get(metric).flatMap(_._2)
 
     def replicationStatsOptional(metric: ClassificationEvalMetric.Value) =
       evalMetricStatsMap.get(metric).flatMap(_._3)
@@ -146,17 +143,24 @@ object MachineLearningUtil {
       areaUnderPR = trainingStatsOptional(areaUnderPR)
     )
 
-    val testMetricStats = ClassificationMetricStats(
-      f1 = testStats(f1),
-      weightedPrecision = testStats(weightedPrecision),
-      weightedRecall = testStats(weightedRecall),
-      accuracy = testStats(accuracy),
-      areaUnderROC = testStatsOptional(areaUnderROC),
-      areaUnderPR = testStatsOptional(areaUnderPR)
-    )
+    val testMetricStats =
+      // we assume if accuracy is defined the rest is fine, otherwise nothing is defined
+      if (testStatsOptional(accuracy).isDefined)
+        Some(
+          ClassificationMetricStats(
+            f1 = testStats(f1),
+            weightedPrecision = testStats(weightedPrecision),
+            weightedRecall = testStats(weightedRecall),
+            accuracy = testStats(accuracy),
+            areaUnderROC = testStatsOptional(areaUnderROC),
+            areaUnderPR = testStatsOptional(areaUnderPR)
+          )
+        )
+      else
+        None
 
     val replicationMetricStats =
-    // we assume if accuracy is defined the rest is fine, otherwise nothing is defined
+      // we assume if accuracy is defined the rest is fine, otherwise nothing is defined
       if (replicationStatsOptional(accuracy).isDefined)
         Some(
           ClassificationMetricStats(
@@ -173,9 +177,11 @@ object MachineLearningUtil {
 
     val binCurvesSeq = binCurves.toSeq
 
+    val specWithSortedFields = spec.copy(ioSpec = spec.ioSpec.copy(inputFieldNames = spec.ioSpec.inputFieldNames.sorted))
+
     ClassificationResult(
       None,
-      setting.copy(inputFieldNames = setting.inputFieldNames.sorted),
+      specWithSortedFields,
       trainingMetricStats,
       testMetricStats,
       replicationMetricStats,
@@ -186,24 +192,21 @@ object MachineLearningUtil {
   }
 
   def createRegressionResult(
-    setting: RegressionSetting,
+    spec: RegressionRunSpec,
     results: Traversable[RegressionPerformance]
   ): RegressionResult =
-    createRegressionResult(
-      setting,
-      calcMetricStats(results)
-    )
+    createRegressionResult(spec, calcMetricStats(results))
 
   def createRegressionResult(
-    setting: RegressionSetting,
-    evalMetricStatsMap: Map[RegressionEvalMetric.Value, (MetricStatsValues, MetricStatsValues, Option[MetricStatsValues])]
+    spec: RegressionRunSpec,
+    evalMetricStatsMap: Map[RegressionEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])]
   ): RegressionResult = {
     // helper functions
     def trainingStatsOptional(metric: RegressionEvalMetric.Value) =
       evalMetricStatsMap.get(metric).map(_._1)
 
     def testStatsOptional(metric: RegressionEvalMetric.Value) =
-      evalMetricStatsMap.get(metric).map(_._2)
+      evalMetricStatsMap.get(metric).flatMap(_._2)
 
     def replicationStatsOptional(metric: RegressionEvalMetric.Value) =
       evalMetricStatsMap.get(metric).flatMap(_._3)
@@ -232,15 +235,22 @@ object MachineLearningUtil {
       mae = trainingStats(mae)
     )
 
-    val testMetricStats = RegressionMetricStats(
-      mse = testStats(mse),
-      rmse = testStats(rmse),
-      r2 = testStats(r2),
-      mae = testStats(mae)
-    )
+    val testMetricStats =
+      // we assume if mse is defined the rest is fine, otherwise nothing is defined
+      if (testStatsOptional(mse).isDefined)
+        Some(
+          RegressionMetricStats(
+            mse = testStats(mse),
+            rmse = testStats(rmse),
+            r2 = testStats(r2),
+            mae = testStats(mae)
+          )
+        )
+      else
+        None
 
     val replicationMetricStats =
-    // we assume if mse is defined the rest is fine, otherwise nothing is defined
+      // we assume if mse is defined the rest is fine, otherwise nothing is defined
       if (replicationStatsOptional(mse).isDefined)
         Some(
           RegressionMetricStats(
@@ -253,9 +263,11 @@ object MachineLearningUtil {
       else
         None
 
+    val specWithSortedFields = spec.copy(ioSpec = spec.ioSpec.copy(inputFieldNames = spec.ioSpec.inputFieldNames.sorted))
+
     RegressionResult(
       None,
-      setting.copy(inputFieldNames = setting.inputFieldNames.sorted),
+      specWithSortedFields,
       trainingMetricStats,
       testMetricStats,
       replicationMetricStats

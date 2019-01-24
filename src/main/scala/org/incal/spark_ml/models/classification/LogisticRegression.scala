@@ -19,7 +19,7 @@ case class LogisticRegression(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends Classification
+) extends ClassificationModel
 
 object LogisticModelFamily extends Enumeration {
   val Auto = Value("auto")

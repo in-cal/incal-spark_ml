@@ -17,7 +17,7 @@ case class GradientBoostRegressionTree(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends Regression
+) extends RegressionModel
 
 object GBTRegressionLossType extends Enumeration {
   val squared, absolute = Value

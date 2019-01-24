@@ -1,4 +1,4 @@
-package org.incal.spark_ml.models.results
+package org.incal.spark_ml.models.result
 
 case class MetricStatsValues(
   mean: Double,

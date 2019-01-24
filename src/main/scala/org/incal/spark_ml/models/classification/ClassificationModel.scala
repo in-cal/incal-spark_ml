@@ -1,9 +1,9 @@
-package org.incal.spark_ml.models.regression
+package org.incal.spark_ml.models.classification
 
 import java.util.Date
 import reactivemongo.bson.BSONObjectID
 
-abstract class Regression {
+trait ClassificationModel {
   val _id: Option[BSONObjectID]
   val name: Option[String]
   val createdById: Option[BSONObjectID]

@@ -17,7 +17,7 @@ case class LinearRegression(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends Regression
+) extends RegressionModel
 
 object RegressionSolver extends Enumeration {
   val Auto = Value("auto")
