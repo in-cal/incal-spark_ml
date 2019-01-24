@@ -8,7 +8,6 @@ case class RegressionLearningSetting(
   outputNormalizationType: Option[VectorScalerType.Value] = None,
   pcaDims: Option[Int] = None,
   trainingTestSplitRatio: Option[Double] = None,
-  trainingTestSplitOrderValue: Option[Double] = None,
   repetitions: Option[Int] = None,
   crossValidationFolds: Option[Int] = None,
   crossValidationEvalMetric: Option[RegressionEvalMetric.Value] = None,

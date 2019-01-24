@@ -7,21 +7,27 @@ import org.incal.spark_ml.models.setting.{RegressionRunSpec, TemporalRegressionR
 
 case class RegressionResult(
   _id: Option[BSONObjectID],
-  spec: RegressionRunSpec,
+  runSpec: RegressionRunSpec,
   trainingStats: RegressionMetricStats,
   testStats: Option[RegressionMetricStats],
   replicationStats: Option[RegressionMetricStats] = None,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractRegressionResult
+) extends AbstractRegressionResult {
+  def ioSpec = runSpec.ioSpec
+  def learningSetting = runSpec.learningSetting
+}
 
 case class TemporalRegressionResult(
   _id: Option[BSONObjectID],
-  spec: TemporalRegressionRunSpec,
+  runSpec: TemporalRegressionRunSpec,
   trainingStats: RegressionMetricStats,
   testStats: Option[RegressionMetricStats],
   replicationStats: Option[RegressionMetricStats] = None,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractRegressionResult
+) extends AbstractRegressionResult {
+  def ioSpec = runSpec.ioSpec
+  def learningSetting = runSpec.learningSetting
+}
 
 trait AbstractRegressionResult {
   val trainingStats: RegressionMetricStats
