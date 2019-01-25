@@ -6,10 +6,16 @@ case class ClassificationRunSpec(
   ioSpec: IOSpec,
   mlModelId: BSONObjectID,
   learningSetting: ClassificationLearningSetting
-) extends RunSpec[IOSpec, ClassificationLearningSetting]
+) extends RunSpec {
+  type IO = IOSpec
+  type S = ClassificationLearningSetting
+}
 
 case class TemporalClassificationRunSpec(
   ioSpec: TemporalGroupIOSpec,
   mlModelId: BSONObjectID,
   learningSetting: TemporalClassificationLearningSetting
-) extends RunSpec[TemporalGroupIOSpec, TemporalClassificationLearningSetting]
+) extends RunSpec {
+  type IO = TemporalGroupIOSpec
+  type S = TemporalClassificationLearningSetting
+}

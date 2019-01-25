@@ -3,7 +3,7 @@ package org.incal.spark_ml.models.result
 import java.{util => ju}
 
 import reactivemongo.bson.BSONObjectID
-import org.incal.spark_ml.models.setting.{ClassificationLearningSetting, ClassificationRunSpec, RunSpec, TemporalClassificationRunSpec}
+import org.incal.spark_ml.models.setting.{ClassificationRunSpec, RunSpec, TemporalClassificationRunSpec}
 
 case class ClassificationResult(
   _id: Option[BSONObjectID],
@@ -15,10 +15,7 @@ case class ClassificationResult(
   testBinCurves: Seq[BinaryClassificationCurves] = Nil,
   replicationBinCurves: Seq[BinaryClassificationCurves] = Nil,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractClassificationResult {
-  def ioSpec = runSpec.ioSpec
-  def learningSetting = runSpec.learningSetting
-}
+) extends AbstractClassificationResult[ClassificationRunSpec]
 
 case class TemporalClassificationResult(
   _id: Option[BSONObjectID],
@@ -30,12 +27,9 @@ case class TemporalClassificationResult(
   testBinCurves: Seq[BinaryClassificationCurves] = Nil,
   replicationBinCurves: Seq[BinaryClassificationCurves] = Nil,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractClassificationResult {
-  def ioSpec = runSpec.ioSpec
-  def learningSetting = runSpec.learningSetting
-}
+) extends AbstractClassificationResult[TemporalClassificationRunSpec]
 
-trait AbstractClassificationResult {
+trait AbstractClassificationResult[T <: RunSpec] extends AbstractResult[T] {
   val trainingStats: ClassificationMetricStats
   val testStats: Option[ClassificationMetricStats]
   val replicationStats: Option[ClassificationMetricStats]

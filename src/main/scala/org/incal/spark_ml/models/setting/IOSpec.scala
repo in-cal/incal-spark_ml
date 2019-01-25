@@ -7,9 +7,7 @@ case class IOSpec(
   outputFieldName: String,
   filterId: Option[BSONObjectID] = None,
   replicationFilterId: Option[BSONObjectID] = None
-) extends AbstractIOSpec {
-  override val allFieldNames = (inputFieldNames ++ Seq(outputFieldName)).toSet.toSeq
-}
+) extends AbstractIOSpec
 
 case class TemporalGroupIOSpec(
   inputFieldNames: Seq[String],
@@ -24,5 +22,10 @@ case class TemporalGroupIOSpec(
 }
 
 trait AbstractIOSpec {
-  def allFieldNames: Seq[String]
+  val inputFieldNames: Seq[String]
+  val outputFieldName: String
+  val filterId: Option[BSONObjectID]
+  val replicationFilterId: Option[BSONObjectID]
+
+  val allFieldNames: Seq[String] = (inputFieldNames ++ Seq(outputFieldName)).toSet.toSeq
 }

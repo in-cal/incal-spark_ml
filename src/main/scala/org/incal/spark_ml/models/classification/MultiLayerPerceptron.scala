@@ -16,7 +16,7 @@ case class MultiLayerPerceptron(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends ClassificationModel
+) extends Classifier
 
 object MLPSolver extends Enumeration {
   val LBFGS = Value("l-bfgs")

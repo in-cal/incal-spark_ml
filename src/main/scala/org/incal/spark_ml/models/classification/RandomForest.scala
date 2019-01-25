@@ -16,7 +16,7 @@ case class RandomForest(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends ClassificationModel
+) extends Classifier
 
 object RandomForestFeatureSubsetStrategy extends Enumeration {
   val auto, all, onethird, sqrt, log2 = Value

@@ -3,7 +3,7 @@ package org.incal.spark_ml.models.result
 import java.{util => ju}
 
 import reactivemongo.bson.BSONObjectID
-import org.incal.spark_ml.models.setting.{RegressionRunSpec, TemporalRegressionRunSpec}
+import org.incal.spark_ml.models.setting.{RegressionRunSpec, RunSpec, TemporalRegressionRunSpec}
 
 case class RegressionResult(
   _id: Option[BSONObjectID],
@@ -12,10 +12,7 @@ case class RegressionResult(
   testStats: Option[RegressionMetricStats],
   replicationStats: Option[RegressionMetricStats] = None,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractRegressionResult {
-  def ioSpec = runSpec.ioSpec
-  def learningSetting = runSpec.learningSetting
-}
+) extends AbstractRegressionResult[RegressionRunSpec]
 
 case class TemporalRegressionResult(
   _id: Option[BSONObjectID],
@@ -24,12 +21,9 @@ case class TemporalRegressionResult(
   testStats: Option[RegressionMetricStats],
   replicationStats: Option[RegressionMetricStats] = None,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractRegressionResult {
-  def ioSpec = runSpec.ioSpec
-  def learningSetting = runSpec.learningSetting
-}
+) extends AbstractRegressionResult[TemporalRegressionRunSpec]
 
-trait AbstractRegressionResult {
+trait AbstractRegressionResult[T <: RunSpec] extends AbstractResult[T] {
   val trainingStats: RegressionMetricStats
   val testStats: Option[RegressionMetricStats]
   val replicationStats: Option[RegressionMetricStats]

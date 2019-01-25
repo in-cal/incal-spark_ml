@@ -1,7 +1,7 @@
 package org.incal.spark_ml.models.setting
 
 import org.incal.spark_ml.models.{ReservoirSpec, VectorScalerType}
-import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, ClassificationModel}
+import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, Classifier}
 
 case class ClassificationLearningSetting(
   featuresNormalizationType: Option[VectorScalerType.Value] = None,

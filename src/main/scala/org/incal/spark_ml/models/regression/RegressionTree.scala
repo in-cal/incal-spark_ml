@@ -11,7 +11,7 @@ case class RegressionTree(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends RegressionModel
+) extends Regressor
 
 object RegressionTreeImpurity extends Enumeration {
   val variance = Value

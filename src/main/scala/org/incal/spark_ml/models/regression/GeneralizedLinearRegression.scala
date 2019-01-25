@@ -16,7 +16,7 @@ case class GeneralizedLinearRegression(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends RegressionModel
+) extends Regressor
 
 object GeneralizedLinearRegressionFamily extends Enumeration {
   val Gaussian = Value("gaussian")

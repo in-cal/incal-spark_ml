@@ -11,7 +11,7 @@ case class NaiveBayes(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends ClassificationModel
+) extends Classifier
 
 object BayesModelType extends Enumeration {
   val multinomial, bernoulli = Value

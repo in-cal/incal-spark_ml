@@ -12,7 +12,7 @@ case class DecisionTree(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends ClassificationModel
+) extends Classifier
 
 object DecisionTreeImpurity extends Enumeration {
   val entropy, gini = Value

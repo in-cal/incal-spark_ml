@@ -16,7 +16,7 @@ case class RandomRegressionForest(
   name: Option[String] = None,
   createdById: Option[BSONObjectID] = None,
   timeCreated: Date = new Date()
-) extends RegressionModel
+) extends Regressor
 
 object RandomRegressionForestFeatureSubsetStrategy extends Enumeration {
   val auto, all, onethird, sqrt, log2 = Value

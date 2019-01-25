@@ -11,8 +11,8 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.slf4j.LoggerFactory
 import org.incal.spark_ml.transformers._
-import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, ClassificationModel}
-import org.incal.spark_ml.models.regression.{RegressionEvalMetric, RegressionModel}
+import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, Classifier}
+import org.incal.spark_ml.models.regression.{RegressionEvalMetric, Regressor}
 import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
 import org.incal.spark_ml.MachineLearningUtil._
 import org.incal.spark_ml.models.result._
@@ -79,7 +79,7 @@ trait SparkMLService {
 
   def classify(
     df: DataFrame,
-    mlModel: ClassificationModel,
+    classifier: Classifier,
     setting: ClassificationLearningSetting = ClassificationLearningSetting(),
     replicationDf: Option[DataFrame] = None
   ): Future[ClassificationResultsHolder]  = {
@@ -95,7 +95,7 @@ trait SparkMLService {
 
     // classify with a random split
     classifyAux(
-      df, replicationDf, mlModel, setting
+      df, replicationDf, classifier, setting
     )(
       split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil
     )
@@ -103,7 +103,7 @@ trait SparkMLService {
 
   def classifyTimeSeries(
     df: DataFrame,
-    mlModel: ClassificationModel,
+    classifier: Classifier,
     setting: TemporalClassificationLearningSetting,
     replicationDf: Option[DataFrame] = None
   ): Future[ClassificationResultsHolder] = {
@@ -124,7 +124,7 @@ trait SparkMLService {
 
     // classify with the time-series transformers and a sequential split
     classifyAux(
-      df, replicationDf, mlModel, setting.core
+      df, replicationDf, classifier, setting.core
     )(
       split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramGrids
     )
@@ -133,7 +133,7 @@ trait SparkMLService {
   protected def classifyAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: ClassificationModel,
+    classifier: Classifier,
     setting: ClassificationLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
@@ -148,7 +148,7 @@ trait SparkMLService {
 
     // classify with the stages
     classifyWithStages(
-      df, replicationDf, mlModel, setting
+      df, replicationDf, classifier, setting
     )(
       splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
     )
@@ -157,7 +157,7 @@ trait SparkMLService {
   protected def classifyWithStages(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: ClassificationModel,
+    classifier: Classifier,
     setting: ClassificationLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
@@ -180,7 +180,7 @@ trait SparkMLService {
     val outputLabelType = df.schema.fields.find(_.name == "label").get
     val outputSize = outputLabelType.metadata.getMetadata("ml_attr").getStringArray("vals").length
 
-    val (trainer, trainerParamGrids) = SparkMLEstimatorFactory(mlModel, inputSize, outputSize)
+    val (trainer, trainerParamGrids) = SparkMLEstimatorFactory(classifier, inputSize, outputSize)
     val fullParamMaps = buildParamGrids(trainerParamGrids ++ paramGrids)
 
     // REPEAT THE TRAINING-TEST CYCLE
@@ -258,7 +258,7 @@ trait SparkMLService {
 
   def regress(
     df: DataFrame,
-    mlModel: RegressionModel,
+    regressor: Regressor,
     setting: RegressionLearningSetting = RegressionLearningSetting(),
     replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
@@ -274,7 +274,7 @@ trait SparkMLService {
 
     // regress
     regressAux(
-      df, replicationDf, mlModel, setting
+      df, replicationDf, regressor, setting
     )(
       split, calcTestPredictions, crossValidatorCreator, Nil, Nil, Nil
     )
@@ -282,7 +282,7 @@ trait SparkMLService {
 
   def regressTimeSeries(
     df: DataFrame,
-    mlModel: RegressionModel,
+    regressor: Regressor,
     setting: TemporalRegressionLearningSetting,
     replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
@@ -303,7 +303,7 @@ trait SparkMLService {
 
     // regress with the time series transformers and a sequential split
     regressAux(
-      df, replicationDf, mlModel, setting.core
+      df, replicationDf, regressor, setting.core
     )(
       split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramMaps
     )
@@ -312,7 +312,7 @@ trait SparkMLService {
   protected def regressAux(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: RegressionModel,
+    regressor: Regressor,
     setting: RegressionLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
@@ -327,7 +327,7 @@ trait SparkMLService {
 
     // regress with the stages
     regressWithStages(
-      df, replicationDf, mlModel, setting
+      df, replicationDf, regressor, setting
     )(
       splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
     )
@@ -336,7 +336,7 @@ trait SparkMLService {
   protected def regressWithStages(
     df: DataFrame,
     replicationDf: Option[DataFrame],
-    mlModel: RegressionModel,
+    regressor: Regressor,
     setting: RegressionLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
@@ -346,7 +346,7 @@ trait SparkMLService {
   ): Future[RegressionResultsHolder] = {
     // CREATE A TRAINER
 
-    val (trainer, trainerParamGrids) = SparkMLEstimatorFactory(mlModel)
+    val (trainer, trainerParamGrids) = SparkMLEstimatorFactory(regressor)
     val fullParamMaps = buildParamGrids(trainerParamGrids ++ paramGrids)
 
     // REPEAT THE TRAINING-TEST CYCLE
