@@ -14,7 +14,6 @@ import org.incal.spark_ml.transformers._
 import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, Classifier}
 import org.incal.spark_ml.models.regression.{RegressionEvalMetric, Regressor}
 import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
-import org.incal.spark_ml.MachineLearningUtil._
 import org.incal.spark_ml.models.result._
 import org.incal.core.util.{STuple3, parallelize}
 import org.incal.spark_ml.models.setting._
@@ -22,7 +21,7 @@ import org.incal.spark_ml.models.setting._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-trait SparkMLService {
+trait SparkMLService extends MLBase {
 
   val rcStatesWindowFactory: RCStatesWindowFactory
   val setting: SparkMLServiceSetting
@@ -43,18 +42,6 @@ trait SparkMLService {
     setInputCol("prediction"); setOutputCol(binaryClassifierInputName)
   }
 
-  private val classificationEvaluators =
-    ClassificationEvalMetric.values.filter(metric =>
-      metric != ClassificationEvalMetric.areaUnderPR && metric != ClassificationEvalMetric.areaUnderROC
-    ).toSeq.map { metric =>
-      val evaluator = new MulticlassClassificationEvaluator()
-        .setLabelCol("label")
-        .setPredictionCol("prediction")
-        .setMetricName(metric.toString)
-
-      EvaluatorWrapper(metric, evaluator)
-    }
-
   private lazy val binClassificationEvaluators =
     Seq(ClassificationEvalMetric.areaUnderPR, ClassificationEvalMetric.areaUnderROC).map { metric =>
       val evaluator = new BinaryClassificationEvaluator()
@@ -67,15 +54,6 @@ trait SparkMLService {
         evaluator
       )
     }
-
-  private val regressionEvaluators = RegressionEvalMetric.values.toSeq.map { metric =>
-    val evaluator = new RegressionEvaluator()
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-      .setMetricName(metric.toString)
-
-    EvaluatorWrapper(metric, evaluator)
-  }
 
   def classify(
     df: DataFrame,
@@ -459,17 +437,17 @@ trait SparkMLService {
     (stages, paramGrids)
   }
 
-  private def randomSplit(setting: LearningSetting[_]) =
-    MachineLearningUtil.randomSplit(setting.trainingTestSplitRatio.getOrElse(defaultTrainingTestingSplitRatio))
+  private def randomSplit(setting: LearningSetting[_]): DataFrame => (DataFrame, DataFrame) =
+    randomSplit(setting.trainingTestSplitRatio.getOrElse(defaultTrainingTestingSplitRatio))
 
   private def seqSplit(
     trainingTestSplitRatio: Option[Double],
     trainingTestSplitOrderValue: Option[Double]
-  ) =
+  ): DataFrame => (DataFrame, DataFrame) =
     if (trainingTestSplitOrderValue.isDefined)
-      MachineLearningUtil.splitByValue(seriesOrderCol)(trainingTestSplitOrderValue.get)
+      splitByValue(seriesOrderCol)(trainingTestSplitOrderValue.get)
     else if (trainingTestSplitRatio.isDefined)
-      MachineLearningUtil.seqSplit(seriesOrderCol)(trainingTestSplitRatio.get)
+      seqSplit(seriesOrderCol)(trainingTestSplitRatio.get)
     else
       throw new IncalSparkMLException("trainingTestSplitRatio or trainingTestSplitOrderValue must be defined for a seq split.")
 
@@ -736,8 +714,6 @@ trait SparkMLService {
       trainAux(trainer)
     )
   }
-
-  case class EvaluatorWrapper[Q](metric: Q, evaluator: Evaluator)
 }
 
 case class SparkMLServiceSetting(

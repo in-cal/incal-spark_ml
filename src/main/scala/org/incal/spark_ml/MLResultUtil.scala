@@ -1,112 +1,46 @@
 package org.incal.spark_ml
 
 import org.apache.commons.math3.stat.descriptive.SummaryStatistics
-import org.apache.spark.ml.Transformer
-import org.apache.spark.ml.param.ParamMap
-import org.apache.spark.sql.{DataFrame, Dataset}
-import org.apache.spark.sql.functions.min
 import org.incal.spark_ml.models.result._
+import org.incal.spark_ml.models.result.ClassificationConstructors._
+import org.incal.spark_ml.models.result.RegressionConstructors._
 import org.incal.spark_ml.models.classification.ClassificationEvalMetric
 import org.incal.spark_ml.models.regression.RegressionEvalMetric
 import org.incal.core.util.STuple3
-import org.incal.spark_ml.models.setting.{ClassificationRunSpec, RegressionRunSpec}
+import org.incal.spark_ml.models.setting.{ClassificationRunSpec, RegressionRunSpec, TemporalClassificationRunSpec, TemporalRegressionRunSpec}
 
-object MachineLearningUtil {
+object MLResultUtil {
 
-  val randomSplit = (splitRatio: Double) => (dataFrame: DataFrame) => {
-    val Array(training, test) = dataFrame.randomSplit(Array(splitRatio, 1 - splitRatio))
-    (training, test)
-  }
+  ////////////////////
+  // Classification //
+  ////////////////////
 
-  val seqSplit = (orderColumn: String) => (splitRatio: Double) => (df: DataFrame) => {
-    val splitValue = df.stat.approxQuantile(orderColumn, Array(splitRatio), 0.001)(0)
-    val headDf = df.where(df(orderColumn) <= splitValue)
-    val tailDf = df.where(df(orderColumn) > splitValue)
-    (headDf, tailDf)
-  }
+  type ClassificationEvalMetricStatsMap = Map[ClassificationEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])]
 
-  val splitByValue = (orderColumn: String) => (splitValue: Double) => (df: DataFrame) => {
-    val headDf = df.where(df(orderColumn) <= splitValue)
-    val tailDf = df.where(df(orderColumn) > splitValue)
-    (headDf, tailDf)
-  }
-
-  val independentTestPredictions =
-    (mlModel: Transformer, testDf: Dataset[_], _: Dataset[_]) => mlModel.transform(testDf)
-
-  val orderDependentTestPredictions = (orderColumn: String) =>
-    (mlModel: Transformer, testDf: Dataset[_], mainDf: Dataset[_]) => {
-      val allPredictions = mlModel.transform(mainDf)
-
-      // either extract a min test index value or if empty return +infinity which will produce empty predictions
-      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head()
-      val minTestIndexVal = if (!minTestIndexRow.isNullAt(0)) minTestIndexRow.getInt(0) else Int.MaxValue
-
-      allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
-    }
-
-  val orderDependentTestPredictionsWithParams = (orderColumn: String) =>
-    (mlModel: Transformer, testDf: Dataset[_], mainDf: Dataset[_], paramMap: ParamMap) => {
-      val allPredictions = mlModel.transform(mainDf, paramMap)
-
-      // either extract a min test index value or if empty return +infinity which will produce empty predictions
-      val minTestIndexRow = testDf.agg(min(testDf(orderColumn))).head()
-      val minTestIndexVal = if (!minTestIndexRow.isNullAt(0)) minTestIndexRow.getInt(0) else Int.MaxValue
-
-      allPredictions.where(allPredictions(orderColumn) >= minTestIndexVal)
-    }
-
-  def calcMetricStats[T <: Enumeration#Value](results: Traversable[Performance[T]]): Map[T, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])] =
-    results.map { result =>
-      val trainingStats = new SummaryStatistics
-      val testStats = new SummaryStatistics
-      val replicationStats = new SummaryStatistics
-
-      result.trainingTestReplicationResults.foreach { case (trainValue, testValue, replicationValue) =>
-        trainingStats.addValue(trainValue)
-        if (testValue.isDefined)
-          testStats.addValue(testValue.get)
-        if (replicationValue.isDefined)
-          replicationStats.addValue(replicationValue.get)
-      }
-
-      val sortedTrainValues = result.trainingTestReplicationResults.map(_._1).toSeq.sorted
-      val sortedTestValues = result.trainingTestReplicationResults.flatMap(_._2).toSeq.sorted
-      val sortedReplicationValues = result.trainingTestReplicationResults.flatMap(_._3).toSeq.sorted
-
-      (result.evalMetric, (
-        toStats(trainingStats, median(sortedTrainValues)),
-        if (testStats.getN > 0) Some(toStats(testStats, median(sortedTestValues))) else None,
-        if (replicationStats.getN > 0) Some(toStats(replicationStats, median(sortedReplicationValues))) else None
-      ))
-    }.toMap
-
-  def median(seq: Seq[Double]): Double = {
-    val middle = seq.size / 2
-    if (seq.size % 2 == 1)
-      seq(middle)
-    else {
-      val med1 = seq(middle - 1)
-      val med2 = seq(middle)
-      (med1 + med2) /2
-    }
-  }
-
-  def toStats(summaryStatistics: SummaryStatistics, median: Double) =
-    MetricStatsValues(summaryStatistics.getMean, summaryStatistics.getMin, summaryStatistics.getMax, summaryStatistics.getVariance, Some(median))
-
-  def createClassificationResult(
-    spec: ClassificationRunSpec,
-    results: Traversable[ClassificationPerformance],
+  def createTemporalClassificationResult(
+    runSpec: TemporalClassificationRunSpec,
+    evalMetricStatsMap: ClassificationEvalMetricStatsMap,
     binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]]
-  ): ClassificationResult =
-    createClassificationResult(spec, calcMetricStats(results), binCurves)
+  ): TemporalClassificationResult = {
+    val specWithSortedFields = runSpec.copy(ioSpec = runSpec.ioSpec.copy(inputFieldNames = runSpec.ioSpec.inputFieldNames.sorted))
+    createClassificationResult[TemporalClassificationResult](specWithSortedFields, evalMetricStatsMap, binCurves)
+  }
 
-  def createClassificationResult(
-    spec: ClassificationRunSpec,
-    evalMetricStatsMap: Map[ClassificationEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])],
+  def createStandardClassificationResult(
+    runSpec: ClassificationRunSpec,
+    evalMetricStatsMap: ClassificationEvalMetricStatsMap,
     binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]]
-  ): ClassificationResult = {
+  ): StandardClassificationResult = {
+    val specWithSortedFields = runSpec.copy(ioSpec = runSpec.ioSpec.copy(inputFieldNames = runSpec.ioSpec.inputFieldNames.sorted))
+    createClassificationResult[StandardClassificationResult](specWithSortedFields, evalMetricStatsMap, binCurves)
+  }
+
+  protected def createClassificationResult[C <: ClassificationResult](
+    runSpec: C#R,
+    evalMetricStatsMap: ClassificationEvalMetricStatsMap,
+    binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]])(
+    implicit constructor: ClassificationResultConstructor[C]
+  ): C = {
     // helper functions
     def trainingStatsOptional(metric: ClassificationEvalMetric.Value) =
       evalMetricStatsMap.get(metric).map(_._1)
@@ -177,11 +111,8 @@ object MachineLearningUtil {
 
     val binCurvesSeq = binCurves.toSeq
 
-    val specWithSortedFields = spec.copy(ioSpec = spec.ioSpec.copy(inputFieldNames = spec.ioSpec.inputFieldNames.sorted))
-
-    ClassificationResult(
-      None,
-      specWithSortedFields,
+    constructor.apply(
+      runSpec,
       trainingMetricStats,
       testMetricStats,
       replicationMetricStats,
@@ -191,16 +122,33 @@ object MachineLearningUtil {
     )
   }
 
-  def createRegressionResult(
-    spec: RegressionRunSpec,
-    results: Traversable[RegressionPerformance]
-  ): RegressionResult =
-    createRegressionResult(spec, calcMetricStats(results))
+  ////////////////
+  // Regression //
+  ////////////////
 
-  def createRegressionResult(
-    spec: RegressionRunSpec,
-    evalMetricStatsMap: Map[RegressionEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])]
-  ): RegressionResult = {
+  type RegressionEvalMetricStatsMap = Map[RegressionEvalMetric.Value, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])]
+
+  def createTemporalRegressionResult(
+    runSpec: TemporalRegressionRunSpec,
+    evalMetricStatsMap: RegressionEvalMetricStatsMap
+  ): TemporalRegressionResult = {
+    val specWithSortedFields = runSpec.copy(ioSpec = runSpec.ioSpec.copy(inputFieldNames = runSpec.ioSpec.inputFieldNames.sorted))
+    createRegressionResult[TemporalRegressionResult](specWithSortedFields, evalMetricStatsMap)
+  }
+
+  def createStandardRegressionResult(
+    runSpec: RegressionRunSpec,
+    evalMetricStatsMap: RegressionEvalMetricStatsMap
+  ): StandardRegressionResult = {
+    val specWithSortedFields = runSpec.copy(ioSpec = runSpec.ioSpec.copy(inputFieldNames = runSpec.ioSpec.inputFieldNames.sorted))
+    createRegressionResult[StandardRegressionResult](specWithSortedFields, evalMetricStatsMap)
+  }
+
+  protected def createRegressionResult[C <: RegressionResult](
+    runSpec: C#R,
+    evalMetricStatsMap: RegressionEvalMetricStatsMap)(
+    implicit constructor: RegressionResultConstructor[C]
+  ): C = {
     // helper functions
     def trainingStatsOptional(metric: RegressionEvalMetric.Value) =
       evalMetricStatsMap.get(metric).map(_._1)
@@ -263,14 +211,52 @@ object MachineLearningUtil {
       else
         None
 
-    val specWithSortedFields = spec.copy(ioSpec = spec.ioSpec.copy(inputFieldNames = spec.ioSpec.inputFieldNames.sorted))
-
-    RegressionResult(
-      None,
-      specWithSortedFields,
+    constructor.apply(
+      runSpec,
       trainingMetricStats,
       testMetricStats,
       replicationMetricStats
     )
   }
+
+  // Aux
+
+  def calcMetricStats[T <: Enumeration#Value](results: Traversable[Performance[T]]): Map[T, (MetricStatsValues, Option[MetricStatsValues], Option[MetricStatsValues])] =
+    results.map { result =>
+      val trainingStats = new SummaryStatistics
+      val testStats = new SummaryStatistics
+      val replicationStats = new SummaryStatistics
+
+      result.trainingTestReplicationResults.foreach { case (trainValue, testValue, replicationValue) =>
+        trainingStats.addValue(trainValue)
+        if (testValue.isDefined)
+          testStats.addValue(testValue.get)
+        if (replicationValue.isDefined)
+          replicationStats.addValue(replicationValue.get)
+      }
+
+      val sortedTrainValues = result.trainingTestReplicationResults.map(_._1).toSeq.sorted
+      val sortedTestValues = result.trainingTestReplicationResults.flatMap(_._2).toSeq.sorted
+      val sortedReplicationValues = result.trainingTestReplicationResults.flatMap(_._3).toSeq.sorted
+
+      (result.evalMetric, (
+        toStats(trainingStats, median(sortedTrainValues)),
+        if (testStats.getN > 0) Some(toStats(testStats, median(sortedTestValues))) else None,
+        if (replicationStats.getN > 0) Some(toStats(replicationStats, median(sortedReplicationValues))) else None
+      ))
+    }.toMap
+
+  def median(seq: Seq[Double]): Double = {
+    val middle = seq.size / 2
+    if (seq.size % 2 == 1)
+      seq(middle)
+    else {
+      val med1 = seq(middle - 1)
+      val med2 = seq(middle)
+      (med1 + med2) /2
+    }
+  }
+
+  def toStats(summaryStatistics: SummaryStatistics, median: Double) =
+    MetricStatsValues(summaryStatistics.getMean, summaryStatistics.getMin, summaryStatistics.getMax, summaryStatistics.getVariance, Some(median))
 }

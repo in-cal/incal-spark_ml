@@ -4,9 +4,11 @@ import org.incal.spark_ml.models.setting.RunSpec
 import reactivemongo.bson.BSONObjectID
 import java.{util => ju}
 
-trait AbstractResult[T <: RunSpec] {
+trait MLResult {
+  type R <: RunSpec
+
   val _id: Option[BSONObjectID]
-  val runSpec: T
+  val runSpec: R
   val timeCreated: ju.Date
 
   def mlModelId = runSpec.mlModelId

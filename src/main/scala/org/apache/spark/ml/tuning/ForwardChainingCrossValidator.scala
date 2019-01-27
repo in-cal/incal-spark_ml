@@ -14,8 +14,7 @@ import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.sql.functions.{max, min}
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.sql.types.StructType
-import org.incal.spark_ml.IncalSparkMLException
-import org.incal.spark_ml.MachineLearningUtil.orderDependentTestPredictionsWithParams
+import org.incal.spark_ml.{IncalSparkMLException, MLBase}
 
 import scala.collection.JavaConverters._
 import org.json4s.DefaultFormats
@@ -23,6 +22,7 @@ import org.json4s.DefaultFormats
 // TODO: could be substantially simplified if CrossValidator provides "splits" function that can be overridden, plus the model would need to be generic
 class ForwardChainingCrossValidator(override val uid: String)
   extends Estimator[ForwardChainingCrossValidatorModel]
+    with MLBase
     with CrossValidatorParams with MLWritable with Logging {
 
   @Since("1.2.0")

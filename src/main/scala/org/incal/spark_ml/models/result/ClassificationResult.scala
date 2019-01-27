@@ -3,9 +3,9 @@ package org.incal.spark_ml.models.result
 import java.{util => ju}
 
 import reactivemongo.bson.BSONObjectID
-import org.incal.spark_ml.models.setting.{ClassificationRunSpec, RunSpec, TemporalClassificationRunSpec}
+import org.incal.spark_ml.models.setting.{ClassificationRunSpec, TemporalClassificationRunSpec}
 
-case class ClassificationResult(
+case class StandardClassificationResult(
   _id: Option[BSONObjectID],
   runSpec: ClassificationRunSpec,
   trainingStats: ClassificationMetricStats,
@@ -15,7 +15,7 @@ case class ClassificationResult(
   testBinCurves: Seq[BinaryClassificationCurves] = Nil,
   replicationBinCurves: Seq[BinaryClassificationCurves] = Nil,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractClassificationResult[ClassificationRunSpec]
+) extends ClassificationResult{ type R = ClassificationRunSpec }
 
 case class TemporalClassificationResult(
   _id: Option[BSONObjectID],
@@ -27,9 +27,9 @@ case class TemporalClassificationResult(
   testBinCurves: Seq[BinaryClassificationCurves] = Nil,
   replicationBinCurves: Seq[BinaryClassificationCurves] = Nil,
   timeCreated: ju.Date = new ju.Date()
-) extends AbstractClassificationResult[TemporalClassificationRunSpec]
+) extends ClassificationResult { type R = TemporalClassificationRunSpec }
 
-trait AbstractClassificationResult[T <: RunSpec] extends AbstractResult[T] {
+trait ClassificationResult extends MLResult {
   val trainingStats: ClassificationMetricStats
   val testStats: Option[ClassificationMetricStats]
   val replicationStats: Option[ClassificationMetricStats]
@@ -59,3 +59,30 @@ case class BinaryClassificationCurves(
   // threshold vs recall
   recallThreshold: Seq[(Double, Double)]
 )
+
+
+// handy constructors
+
+trait ClassificationResultConstructor[C <: ClassificationResult] {
+
+  def apply: (
+    C#R,
+    ClassificationMetricStats,
+    Option[ClassificationMetricStats],
+    Option[ClassificationMetricStats],
+    Seq[BinaryClassificationCurves],
+    Seq[BinaryClassificationCurves],
+    Seq[BinaryClassificationCurves]
+  ) => C
+}
+
+object ClassificationConstructors {
+
+  implicit object StandardClassification extends ClassificationResultConstructor[StandardClassificationResult] {
+    override def apply = StandardClassificationResult(None, _, _, _, _, _, _, _)
+  }
+
+  implicit object TemporalClassification extends ClassificationResultConstructor[TemporalClassificationResult] {
+    override def apply = TemporalClassificationResult(None, _, _, _, _, _, _, _)
+  }
+}
