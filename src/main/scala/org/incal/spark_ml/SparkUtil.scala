@@ -1,14 +1,15 @@
 package org.incal.spark_ml
 
+import examples.IrisClassification._
+import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.ml.{Estimator, Pipeline, PipelineModel, PipelineStage}
-import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
+import org.apache.spark.sql._
 import org.apache.spark.ml.linalg.{DenseVector, SparseVector, Vector, Vectors}
 import org.apache.spark.sql.functions.{monotonically_increasing_id, struct, udf}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 
 import scala.reflect.ClassTag
-import org.apache.spark.sql.Encoders
-import org.incal.spark_ml.transformers.SchemaUnchangedTransformer
+import org.incal.spark_ml.transformers.{FixedOrderStringIndexer, SchemaUnchangedTransformer}
 
 import scala.collection.mutable.ArrayBuilder
 import scala.util.Random
@@ -136,4 +137,63 @@ object SparkUtil {
   }
 
   implicit def kryoEncoder[A](implicit ct: ClassTag[A]) = Encoders.kryo[A](ct)
+
+  def prepFeaturesDataFrame(
+    featureFieldNames: Set[String],
+    outputFieldName: Option[String],
+    dropFeatureCols: Boolean = true,
+    dropNaValues: Boolean = true)(
+    df: DataFrame
+  ): DataFrame = {
+    // drop null values
+    val nonNullDf = if (dropNaValues) df.na.drop else df
+
+    val existingFeatureCols = nonNullDf.columns.filter(featureFieldNames.contains)
+
+    val assembler = new VectorAssembler()
+      .setInputCols(existingFeatureCols)
+      .setOutputCol("features")
+
+    val featuresDf = assembler.transform(nonNullDf)
+
+    val finalDf = outputFieldName.map(
+      featuresDf.withColumnRenamed(_, "label")
+    ).getOrElse(
+      featuresDf
+    )
+
+    if (dropFeatureCols) {
+      val columnsToDrop = outputFieldName.map { outputFieldName =>
+        existingFeatureCols.filterNot(_.equals(outputFieldName))
+      }.getOrElse(
+        existingFeatureCols
+      )
+      finalDf.drop(columnsToDrop: _ *)
+    } else
+      finalDf
+  }
+
+  def indexStringCols(
+    columnNameWithEnumLabels: Seq[(String, Seq[String])])(
+    df: DataFrame
+  ) =
+    columnNameWithEnumLabels.foldLeft(df){ case (newDf, (columnName, enumLabels)) =>
+      val tempCol = columnName + Random.nextLong()
+
+      // if enum labels provided create an fixed-order string indexer, otherwise use a standard one, which index values based on their frequencies
+      val indexer = if (enumLabels.nonEmpty) {
+        new FixedOrderStringIndexer().setLabels(enumLabels.toArray).setInputCol(columnName).setOutputCol(tempCol).setHandleInvalid("skip")
+      } else
+        new StringIndexer().setInputCol(columnName).setOutputCol(tempCol).setHandleInvalid("skip")
+
+      indexer.fit(newDf).transform(newDf).drop(columnName).withColumnRenamed(tempCol, columnName)
+    }
+
+  def remoteCsvToDataFrame(url: String, header: Boolean = true)(session: SparkSession) = {
+    import session.sqlContext.implicits._
+
+    val src = scala.io.Source.fromURL(url)
+    val csvData: Dataset[String] = session.sparkContext.parallelize(src.mkString.stripMargin.lines.toList).toDS()
+    session.read.option("header", header).option("inferSchema", true).csv(csvData)
+  }
 }

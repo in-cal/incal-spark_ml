@@ -1,5 +1,6 @@
 package org.incal.spark_ml
 
+import javax.inject.Inject
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Evaluator, MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.{util, _}
 import org.apache.spark.sql.types._
@@ -83,11 +84,12 @@ trait SparkMLService extends MLBase {
     df: DataFrame,
     classifier: Classifier,
     setting: TemporalClassificationLearningSetting,
+    groupIdColumnName: Option[String] = None,
     replicationDf: Option[DataFrame] = None
   ): Future[ClassificationResultsHolder] = {
 
     // time series transformers/stages
-    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(setting)
+    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
 
     // forward-chaining cross validator
     val crossValidatorCreator = setting.core.crossValidationFolds.map(
@@ -262,10 +264,11 @@ trait SparkMLService extends MLBase {
     df: DataFrame,
     regressor: Regressor,
     setting: TemporalRegressionLearningSetting,
+    groupIdColumnName: Option[String] = None,
     replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
     // time series transformers/stages
-    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(setting)
+    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
     //    val showDf = SchemaUnchangedTransformer { df: DataFrame => df.orderBy(seriesOrderCol).show(false); df }
 
     // forward-chaining cross validator
@@ -402,6 +405,7 @@ trait SparkMLService extends MLBase {
   }
 
   protected def createTimeSeriesStagesWithParamGrids(
+    groupIdColumnName: Option[String],
     setting: TemporalLearningSetting
   ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]]) = {
     if (setting.slidingWindowSize.isEmpty && setting.reservoirSetting.isEmpty)
@@ -409,13 +413,13 @@ trait SparkMLService extends MLBase {
 
     val dlTransformer = setting.slidingWindowSize.map(
       if (useConsecutiveOrderForDL)
-        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, setting.groupIdColumnName)
+        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, groupIdColumnName)
       else
-        SlidingWindow.applyInPlace("features", seriesOrderCol, setting.groupIdColumnName)
+        SlidingWindow.applyInPlace("features", seriesOrderCol, groupIdColumnName)
     )
 
-    if (setting.reservoirSetting.isDefined && setting.groupIdColumnName.isDefined)
-      throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${setting.groupIdColumnName.get}, which is currently unsupported.")
+    if (setting.reservoirSetting.isDefined && groupIdColumnName.isDefined)
+      throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${groupIdColumnName.get}. This combination is currently unsupported.")
 
     val rcTransformerWithParamGrids = setting.reservoirSetting.map(rcStatesWindowFactory.applyInPlace("features", seriesOrderCol))
 
@@ -424,9 +428,9 @@ trait SparkMLService extends MLBase {
 
     val labelShiftTransformer =
       if (useConsecutiveOrderForDL)
-        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, setting.groupIdColumnName)(setting.predictAhead)
+        SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, groupIdColumnName)(setting.predictAhead)
       else
-        SeqShift.applyInPlace("label", seriesOrderCol, setting.groupIdColumnName)(setting.predictAhead)
+        SeqShift.applyInPlace("label", seriesOrderCol, groupIdColumnName)(setting.predictAhead)
 
     val stages = Seq(
       dlTransformer.map(() => _),
@@ -639,18 +643,20 @@ trait SparkMLService extends MLBase {
     numBins: Option[Int] = None,
     probabilityCol: String = binaryClassifierInputName,
     labelCol: String = "label"
-  ): Option[BinaryClassificationMetrics] = {
-    val topRow = predictions.select(binaryClassifierInputName).head()
-    if (topRow.getAs[Vector](0).size == 2) {
-      val metrics = new BinaryClassificationMetrics(
-        predictions.select(col(probabilityCol), col(labelCol).cast(DoubleType)).rdd.map {
-          case Row(score: Vector, label: Double) => (score(1), label)
-        }, numBins.getOrElse(0)
-      )
-      Some(metrics)
+  ): Option[BinaryClassificationMetrics] =
+    if (predictions.count() > 0) {
+      val topRow = predictions.select(binaryClassifierInputName).head()
+      if (topRow.getAs[Vector](0).size == 2) {
+        val metrics = new BinaryClassificationMetrics(
+          predictions.select(col(probabilityCol), col(labelCol).cast(DoubleType)).rdd.map {
+            case Row(score: Vector, label: Double) => (score(1), label)
+          }, numBins.getOrElse(0)
+        )
+        Some(metrics)
+      } else
+        None
     } else
       None
-  }
 
   private def train(
     trainer: Estimator[_],

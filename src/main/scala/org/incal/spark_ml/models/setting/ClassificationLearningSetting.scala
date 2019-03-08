@@ -21,6 +21,5 @@ case class TemporalClassificationLearningSetting(
   slidingWindowSize: Option[Int] = None,
   reservoirSetting: Option[ReservoirSpec] = None,
   minCrossValidationTrainingSizeRatio: Option[Double] = None,
-  trainingTestSplitOrderValue: Option[Double] = None,
-  groupIdColumnName: Option[String] = None
+  trainingTestSplitOrderValue: Option[Double] = None
 ) extends TemporalLearningSetting

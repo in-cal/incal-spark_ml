@@ -17,5 +17,4 @@ trait TemporalLearningSetting {
   val reservoirSetting: Option[ReservoirSpec]
   val minCrossValidationTrainingSizeRatio: Option[Double]
   val trainingTestSplitOrderValue: Option[Double]
-  val groupIdColumnName: Option[String]
 }
