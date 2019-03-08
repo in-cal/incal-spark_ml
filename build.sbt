@@ -2,9 +2,9 @@ organization := "org.in-cal"
 
 name := "incal-spark_ml"
 
-version := "0.0.21"
+version := "0.0.24"
 
-description := "Extension of Spark ML library for the temporal domain with a lot of handy transformers, classification and regression models, and a convenient customizable pipeline execution."
+description := "Spark ML library extension primarily for the temporal domain with a lot of handy transformers, classification and regression models, and a convenient customizable pipeline execution."
 
 isSnapshot := false
 
@@ -19,7 +19,7 @@ libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "2.2.0",
   "org.apache.spark" %% "spark-sql" % "2.2.0",
   "org.apache.spark" %% "spark-mllib" % "2.2.0",
-  "com.banda.network" % "banda-network-business" % "0.5.6.1",
+  "com.banda.network" % "banda-network-business-guice" % "0.5.6.1",
   "org.slf4j" % "slf4j-api" % "1.7.21",
   "org.in-cal" %% "incal-core" % "0.0.10",
   "org.reactivemongo" %% "reactivemongo-bson" % "0.12.6"    // BSON ids should be removed together with this lib
