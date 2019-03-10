@@ -38,37 +38,41 @@ object TemporalClassification extends SparkMLApp((session: SparkSession, mlServi
   // logistic regression spec
   val logisticRegressionSpec = LogisticRegression(
     family = Some(LogisticModelFamily.Binomial),
-    regularization = Left(Some(0.1)),
-    elasticMixingRatio = Left(Some(0.5))
+    regularization = Right(Seq(10, 1, 0.1, 0.01, 0.001)),
+    elasticMixingRatio = Right(Seq(0, 0.5, 1))
   )
 
   // learning setting
   val classificationLearningSetting = ClassificationLearningSetting(
     trainingTestSplitRatio = Some(0.8),
     featuresNormalizationType = Some(VectorScalerType.StandardScaler),
-    crossValidationEvalMetric = Some(ClassificationEvalMetric.accuracy),
-    crossValidationFolds = Some(5)
+    crossValidationEvalMetric = Some(ClassificationEvalMetric.areaUnderROC),
+    crossValidationFolds = Some(5),
+    featuresSelectionNum = Some(3)
   )
 
   val temporalLearningSetting = TemporalClassificationLearningSetting(
     core = classificationLearningSetting,
     predictAhead = 100,
-    slidingWindowSize = Right(Seq(5,10,15))
+    slidingWindowSize = Right(Seq(4,5,6))// Right(Seq(5,10,20,40))
   )
 
-  // aux function to get a mean training and test accuracy
-  def calcMeanAccuracy(results: ClassificationResultsHolder) = {
+  // aux function to get a mean training and test accuracy and AUROC
+  def calcMeanAccuracyAndAUROC(results: ClassificationResultsHolder) = {
     val metricStatsMap = MLResultUtil.calcMetricStats(results.performanceResults)
     val (trainingAccuracy, Some(testAccuracy), _) = metricStatsMap.get(ClassificationEvalMetric.accuracy).get
-    (trainingAccuracy.mean, testAccuracy.mean)
+    val (trainingAUROC, Some(testAUROC), _) = metricStatsMap.get(ClassificationEvalMetric.areaUnderROC).get
+
+    ((trainingAccuracy.mean, testAccuracy.mean), (trainingAUROC.mean, Some(testAUROC.mean)))
   }
 
   for {
     // run the logistic regression and get results
-    results5 <- mlService.classifyTimeSeries(finalDf, logisticRegressionSpec, temporalLearningSetting)
+    results <- mlService.classifyTimeSeries(finalDf, logisticRegressionSpec, temporalLearningSetting)
   } yield {
-    val (trainingAccuracy5, testAccuracy5) = calcMeanAccuracy(results5)
+    val ((trainingAccuracy, testAccuracy), (trainingAUROC, testAUROC)) = calcMeanAccuracyAndAUROC(results)
 
-    println(s"Logistic regression sw = 5  (accuracy): $trainingAccuracy5 / $testAccuracy5")
+    println(s"AUROC   : $trainingAUROC / $testAUROC")
+    println(s"Accuracy: $trainingAccuracy / $testAccuracy")
   }
 })
