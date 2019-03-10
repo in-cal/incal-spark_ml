@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory
 import org.incal.spark_ml.transformers._
 import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, Classifier}
 import org.incal.spark_ml.models.regression.{RegressionEvalMetric, Regressor}
-import org.incal.spark_ml.CrossValidatorFactory.CrossValidatorCreator
+import org.incal.spark_ml.CrossValidatorFactory.{CrossValidatorCreator, CrossValidatorCreatorWithProcessor}
 import org.incal.spark_ml.models.result._
 import org.incal.core.util.{STuple3, parallelize}
 import org.incal.spark_ml.models.setting._
@@ -89,7 +89,7 @@ trait SparkMLService extends MLBase {
   ): Future[ClassificationResultsHolder] = {
 
     // time series transformers/stages
-    val (timeSeriesStages, paramGrids) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
+    val (timeSeriesStages, paramGrids, kernelSize) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
 
     // forward-chaining cross validator
     val crossValidatorCreator = setting.core.crossValidationFolds.map(
@@ -106,7 +106,7 @@ trait SparkMLService extends MLBase {
     classifyAux(
       df, replicationDf, classifier, setting.core
     )(
-      split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramGrids
+      split, calcTestPredictions, crossValidatorCreator, Nil, timeSeriesStages, paramGrids, kernelSize
     )
   }
 
@@ -117,10 +117,11 @@ trait SparkMLService extends MLBase {
     setting: ClassificationLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
-    crossValidatorCreator: Option[CrossValidatorCreator],
+    crossValidatorCreatorWithProcessor: Option[CrossValidatorCreatorWithProcessor],
     initStages: Seq[() => PipelineStage],
     preTrainingStages: Seq[() => PipelineStage],
-    paramGrids: Traversable[ParamGrid[_]] = Nil
+    paramGrids: Traversable[ParamGrid[_]] = Nil,
+    kernelSize: Int => Int = identity
   ): Future[ClassificationResultsHolder] = {
     // stages
     val coreStages = classificationStages(setting)
@@ -130,7 +131,7 @@ trait SparkMLService extends MLBase {
     classifyWithStages(
       df, replicationDf, classifier, setting
     )(
-      splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
+      splitDataSet, calcTestPredictions, crossValidatorCreatorWithProcessor, stages, paramGrids, kernelSize
     )
   }
 
@@ -141,9 +142,10 @@ trait SparkMLService extends MLBase {
     setting: ClassificationLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
-    crossValidatorCreator: Option[CrossValidatorCreator],
+    crossValidatorCreatorWithProcessor: Option[CrossValidatorCreatorWithProcessor],
     stages: Seq[() => PipelineStage],
-    paramGrids: Traversable[ParamGrid[_]]
+    paramGrids: Traversable[ParamGrid[_]],
+    kernelSize: Int => Int
   ): Future[ClassificationResultsHolder] = {
 
     // cache the data frames
@@ -155,7 +157,8 @@ trait SparkMLService extends MLBase {
 
     val originalFeaturesType = df.schema.fields.find(_.name == "features").get
     val originalInputSize = originalFeaturesType.metadata.getMetadata("ml_attr").getLong("num_attrs").toInt
-    val inputSize = setting.pcaDims.getOrElse(originalInputSize)
+    val inputSize = kernelSize(setting.pcaDims.getOrElse(originalInputSize))
+    println(s"Input Size: ${inputSize}.")
 
     val outputLabelType = df.schema.fields.find(_.name == "label").get
     val outputSize = outputLabelType.metadata.getMetadata("ml_attr").getStringArray("vals").length
@@ -189,7 +192,7 @@ trait SparkMLService extends MLBase {
         fullParamMaps,
         evaluators,
         crossValidationEvaluator.evaluator,
-        crossValidatorCreator,
+        crossValidatorCreatorWithProcessor,
         splitDataset,
         calcTestPredictions,
         outputSize,
@@ -268,7 +271,7 @@ trait SparkMLService extends MLBase {
     replicationDf: Option[DataFrame] = None
   ): Future[RegressionResultsHolder] = {
     // time series transformers/stages
-    val (timeSeriesStages, paramMaps) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
+    val (timeSeriesStages, paramMaps, kernelSize) = createTimeSeriesStagesWithParamGrids(groupIdColumnName, setting)
     //    val showDf = SchemaUnchangedTransformer { df: DataFrame => df.orderBy(seriesOrderCol).show(false); df }
 
     // forward-chaining cross validator
@@ -297,7 +300,7 @@ trait SparkMLService extends MLBase {
     setting: RegressionLearningSetting)(
     splitDataSet: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
-    crossValidatorCreator: Option[CrossValidatorCreator],
+    crossValidatorCreatorWithProcessor: Option[CrossValidatorCreatorWithProcessor],
     initStages: Seq[() => PipelineStage],
     preTrainingStages: Seq[() => PipelineStage],
     paramGrids: Traversable[ParamGrid[_]]
@@ -310,7 +313,7 @@ trait SparkMLService extends MLBase {
     regressWithStages(
       df, replicationDf, regressor, setting
     )(
-      splitDataSet, calcTestPredictions, crossValidatorCreator, stages, paramGrids
+      splitDataSet, calcTestPredictions, crossValidatorCreatorWithProcessor, stages, paramGrids
     )
   }
 
@@ -321,7 +324,7 @@ trait SparkMLService extends MLBase {
     setting: RegressionLearningSetting)(
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
-    crossValidatorCreator: Option[CrossValidatorCreator],
+    crossValidatorCreatorWithProcessor: Option[CrossValidatorCreatorWithProcessor],
     stages: Seq[() => PipelineStage],
     paramGrids: Traversable[ParamGrid[_]]
   ): Future[RegressionResultsHolder] = {
@@ -339,6 +342,8 @@ trait SparkMLService extends MLBase {
       ).getOrElse(
         regressionEvaluators.find(_.metric == defaultRegressionCrossValidationEvalMetric).get
       )
+
+    val crossValidatorCreator = crossValidatorCreatorWithProcessor.map(_(None))
 
     val count = df.count()
 
@@ -407,7 +412,7 @@ trait SparkMLService extends MLBase {
   protected def createTimeSeriesStagesWithParamGrids(
     groupIdColumnName: Option[String],
     setting: TemporalLearningSetting
-  ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]]) = {
+  ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]], Int => Int) = {
     val slidingWindowUndefined = setting.slidingWindowSize.isLeft && setting.slidingWindowSize.left.get.isEmpty
 
     if (slidingWindowUndefined && setting.reservoirSetting.isEmpty)
@@ -451,7 +456,21 @@ trait SparkMLService extends MLBase {
       Some(() => labelShiftTransformer)
     ).flatten
 
-    (stages, swParamGrids ++ rcParamGrids)
+    // TODO: this works (we extract the (kernel) size) only if it is a constant
+    val sizeFun = (inputSize: Int) =>
+      if (setting.reservoirSetting.isDefined) {
+        setting.reservoirSetting.get.reservoirNodeNum match {
+          case Left(value) => value.getOrElse(inputSize)
+          case Right(_) => inputSize
+        }
+      } else {
+        setting.slidingWindowSize match {
+          case Left(value) => value.map(_ * inputSize).getOrElse(inputSize)
+          case Right(_) => inputSize
+        }
+      }
+
+    (stages, swParamGrids ++ rcParamGrids, sizeFun)
   }
 
   private def randomSplit(setting: LearningSetting[_]): DataFrame => (DataFrame, DataFrame) =
@@ -501,7 +520,7 @@ trait SparkMLService extends MLBase {
     paramMaps: Array[ParamMap],
     evaluators: Seq[EvaluatorWrapper[ClassificationEvalMetric.Value]],
     crossValidationEvaluator: Evaluator,
-    crossValidatorCreator: Option[CrossValidatorCreator],
+    crossValidatorCreatorWithProcessor: Option[CrossValidatorCreatorWithProcessor],
     splitDataset: DataFrame => (DataFrame, DataFrame),
     calcTestPredictions: (Transformer, Dataset[_], Dataset[_]) => DataFrame,
     outputSize: Int,
@@ -512,11 +531,12 @@ trait SparkMLService extends MLBase {
   ): ClassificationResultsAuxHolder = {
 
     // run the trainer (with folds) with a given split (which will produce training and test data sets) and a replication df (if provided)
+    val predictionsProcessor = withBinaryEvaluationCol(outputSize)
     val (trainPredictions, testPredictions, replicationPredictions) = train(
       trainer,
       paramMaps,
       crossValidationEvaluator,
-      crossValidatorCreator,
+      crossValidatorCreatorWithProcessor.map(_(Some(predictionsProcessor))),
       splitDataset,
       calcTestPredictions,
       mainDf,
@@ -525,19 +545,13 @@ trait SparkMLService extends MLBase {
 
     // evaluate the performance
 
-    def withBinaryEvaluationCol(df: DataFrame) =
-      if (outputSize == 2 && !df.columns.contains(binaryClassifierInputName)) {
-        binaryPredictionVectorizer.transform(df)
-      } else
-        df
-
     // cache the predictions
     trainPredictions.cache()
     testPredictions.cache()
     replicationPredictions.foreach(_.cache())
 
-    val trainingPredictionsExt = withBinaryEvaluationCol(trainPredictions)
-    val testPredictionsExt = (Seq(testPredictions) ++ replicationPredictions).map(withBinaryEvaluationCol)
+    val trainingPredictionsExt = predictionsProcessor(trainPredictions)
+    val testPredictionsExt = (Seq(testPredictions) ++ replicationPredictions).map(predictionsProcessor)
 
     val results = evaluate(evaluators, trainingPredictionsExt, testPredictionsExt)
 
@@ -557,6 +571,13 @@ trait SparkMLService extends MLBase {
     replicationPredictions.foreach(_.unpersist)
 
     ClassificationResultsAuxHolder(results, count, binTrainingCurves, binTestCurves)
+  }
+
+  private def withBinaryEvaluationCol(outputSize: Int) = { df: DataFrame =>
+    if (outputSize == 2 && !df.columns.contains(binaryClassifierInputName)) {
+      binaryPredictionVectorizer.transform(df)
+    } else
+      df
   }
 
   protected def classificationStages(

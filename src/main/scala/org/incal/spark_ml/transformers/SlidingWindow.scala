@@ -41,7 +41,6 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
   private def seqSizeEq(size: Int) = udf { seq: Seq[_] => seq.size == size }
 
   override def transform(dataset: Dataset[_]): DataFrame = {
-    println(s"Window Size: ${$(windowSize)}.")
     require($(windowSize) > 0, "Window size must be a positive integer.")
 
     val inputType = dataset.schema($(inputCol)).dataType

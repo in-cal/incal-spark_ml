@@ -21,12 +21,12 @@ object ClassificationWithCrossValidation extends SparkMLApp((session: SparkSessi
   val outputColumnName = Column.clazz.toString
   val featureColumnNames = columnNames.filter(_ != outputColumnName)
 
-  // read csv and create a data frame with given column names
+  // read a csv and create a data frame with given column names
   val url = "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
   // index the clazz column since it's of the string type
-  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
+  val df2 = indexStringCols(Seq((outputColumnName, Nil)))(df)
 
   // turn the data frame into ML-ready one with features and a label
   val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)

@@ -2,7 +2,7 @@ package examples
 
 import org.apache.spark.sql.SparkSession
 import org.incal.spark_ml.models.TreeCore
-import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, LogisticModelFamily, LogisticRegression, RandomForest}
+import org.incal.spark_ml.models.classification._
 import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.result.ClassificationResultsHolder
@@ -20,27 +20,32 @@ object SimpleClassification extends SparkMLApp((session: SparkSession, mlService
   val outputColumnName = Column.clazz.toString
   val featureColumnNames = columnNames.filter(_ != outputColumnName)
 
-  // read csv and create a data frame with given column names
+  // read a csv and create a data frame with given column names
   val url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
   // index the clazz column since it's of the string type
-  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
+  val df2 = indexStringCols(Seq((outputColumnName, Nil)))(df)
 
   // turn the data frame into ML-ready one with features and a label
   val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)
-
-  // random forest spec
-  val randomForestSpec = RandomForest(
-    core = TreeCore(maxDepth = Left(Some(5)))
-  )
 
   // logistic regression spec
   val logisticRegressionSpec = LogisticRegression(
     family = Some(LogisticModelFamily.Multinomial),
     maxIteration = Left(Some(200)),
-    regularization = Left(Some(0.3)),
-    elasticMixingRatio = Left(Some(0.8))
+    regularization = Left(Some(0.1)),
+    elasticMixingRatio = Left(Some(0.5))
+  )
+
+  // multi-layer perceptron spec
+  val multiLayerPerceptronSpec = MultiLayerPerceptron(
+    hiddenLayers = Seq(5, 5)
+  )
+
+  // random forest spec
+  val randomForestSpec = RandomForest(
+    core = TreeCore(maxDepth = Left(Some(5)))
   )
 
   // learning setting
@@ -54,20 +59,21 @@ object SimpleClassification extends SparkMLApp((session: SparkSession, mlService
   }
 
   for {
-    // run the random forest and get results
-    randomForestResults <- mlService.classify(finalDf, randomForestSpec, learningSetting)
-
     // run the logistic regression and get results
     logisticRegressionResults <- mlService.classify(finalDf, logisticRegressionSpec, learningSetting)
-  } yield {
-    val (rfTrainingAccuracy, rfTestAccuracy) = calcMeanAccuracy(randomForestResults)
-    val (lrTrainingAccuracy, lrTestAccuracy) = calcMeanAccuracy(logisticRegressionResults)
 
-    println(s"Random forest       (accuracy): $rfTrainingAccuracy / $rfTestAccuracy")
-    println(s"Logistic regression (accuracy): $lrTrainingAccuracy / $lrTestAccuracy")
+    // run the multi-layer perceptron and get results
+    multiLayerPerceptronResults <- mlService.classify(finalDf, multiLayerPerceptronSpec, learningSetting)
+
+    // run the random forest and get results
+    randomForestResults <- mlService.classify(finalDf, randomForestSpec, learningSetting)
+  } yield {
+    val (lrTrainingAccuracy, lrTestAccuracy) = calcMeanAccuracy(logisticRegressionResults)
+    val (mlpTrainingAccuracy, mlpTestAccuracy) = calcMeanAccuracy(multiLayerPerceptronResults)
+    val (rfTrainingAccuracy, rfTestAccuracy) = calcMeanAccuracy(randomForestResults)
+
+    println(s"Logistic regression    (accuracy): $lrTrainingAccuracy / $lrTestAccuracy")
+    println(s"Multi-layer perceptron (accuracy): $mlpTrainingAccuracy / $mlpTestAccuracy")
+    println(s"Random forest          (accuracy): $rfTrainingAccuracy / $rfTestAccuracy")
   }
 })
-
-//{
-//  override def conf = new SparkConf().setMaster("local[*]").setAppName("Test-LALALA")
-//}

@@ -3,16 +3,16 @@ package examples
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.BooleanType
 import org.incal.spark_ml.SparkUtil._
-import org.incal.spark_ml.models.VectorScalerType
-import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, LogisticModelFamily, LogisticRegression, RandomForest}
+import org.incal.spark_ml.models.{TreeCore, VectorScalerType}
+import org.incal.spark_ml.models.classification._
 import org.incal.spark_ml.models.result.ClassificationResultsHolder
 import org.incal.spark_ml.models.setting.{ClassificationLearningSetting, TemporalClassificationLearningSetting}
 import org.incal.spark_ml.transformers.BooleanLabelIndexer
-import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
+import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService, SparkMLServiceSetting}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object TemporalClassification extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
+object TemporalClassificationWithSlidingWindow extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {
     val index,AF3,F7,F3,FC5,T7,P7,O1,O2,P8,T8,FC6,F4,F8,AF4,eyeDetection,eyeDetectionBool = Value
@@ -23,7 +23,7 @@ object TemporalClassification extends SparkMLApp((session: SparkSession, mlServi
   val orderColumnName = Column.index.toString
   val featureColumnNames = columnNames.filter(name => name != outputColumnName && name != orderColumnName)
 
-  // read csv and create a data frame with given column names
+  // read a csv and create a data frame with given column names
   val url = "https://in-cal.org/data/EEG_Eye_State_by_DBWH.csv"
   val df = remoteCsvToDataFrame(url, true)(session)
 
@@ -33,8 +33,6 @@ object TemporalClassification extends SparkMLApp((session: SparkSession, mlServi
   val df3 = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)
   val finalDf = BooleanLabelIndexer(Some(outputColumnName)).transform(df3)
 
-  finalDf.show(truncate = false)
-
   // logistic regression spec
   val logisticRegressionSpec = LogisticRegression(
     family = Some(LogisticModelFamily.Binomial),
@@ -42,19 +40,28 @@ object TemporalClassification extends SparkMLApp((session: SparkSession, mlServi
     elasticMixingRatio = Right(Seq(0, 0.5, 1))
   )
 
+  // random forest spec
+  val randomForestSpec = RandomForest(
+    core = TreeCore(maxDepth = Right(Seq(5,6,7)))
+  )
+
+  // linear SVM spec
+  val linearSupportVectorMachineSpec = LinearSupportVectorMachine(
+    regularization = Right(Seq(10, 1, 0.1, 0.01, 0.001))
+  )
+
   // learning setting
   val classificationLearningSetting = ClassificationLearningSetting(
-    trainingTestSplitRatio = Some(0.8),
+    trainingTestSplitRatio = Some(0.75),
     featuresNormalizationType = Some(VectorScalerType.StandardScaler),
     crossValidationEvalMetric = Some(ClassificationEvalMetric.areaUnderROC),
-    crossValidationFolds = Some(5),
-    featuresSelectionNum = Some(3)
+    crossValidationFolds = Some(5)
   )
 
   val temporalLearningSetting = TemporalClassificationLearningSetting(
     core = classificationLearningSetting,
-    predictAhead = 100,
-    slidingWindowSize = Right(Seq(4,5,6))// Right(Seq(5,10,20,40))
+    predictAhead = 100, // roughly 0.78 sec ahead
+    slidingWindowSize = Right(Seq(4,5,6))
   )
 
   // aux function to get a mean training and test accuracy and AUROC
@@ -63,16 +70,29 @@ object TemporalClassification extends SparkMLApp((session: SparkSession, mlServi
     val (trainingAccuracy, Some(testAccuracy), _) = metricStatsMap.get(ClassificationEvalMetric.accuracy).get
     val (trainingAUROC, Some(testAUROC), _) = metricStatsMap.get(ClassificationEvalMetric.areaUnderROC).get
 
-    ((trainingAccuracy.mean, testAccuracy.mean), (trainingAUROC.mean, Some(testAUROC.mean)))
+    ((trainingAccuracy.mean, testAccuracy.mean), (trainingAUROC.mean, testAUROC.mean))
   }
 
   for {
     // run the logistic regression and get results
-    results <- mlService.classifyTimeSeries(finalDf, logisticRegressionSpec, temporalLearningSetting)
-  } yield {
-    val ((trainingAccuracy, testAccuracy), (trainingAUROC, testAUROC)) = calcMeanAccuracyAndAUROC(results)
+    lrResults <- mlService.classifyTimeSeries(finalDf, logisticRegressionSpec, temporalLearningSetting)
 
-    println(s"AUROC   : $trainingAUROC / $testAUROC")
-    println(s"Accuracy: $trainingAccuracy / $testAccuracy")
+    // run the random forest and get results
+    rfResults <- mlService.classifyTimeSeries(finalDf, randomForestSpec, temporalLearningSetting)
+
+    // run the linear svm and get results
+    lsvmResults <- mlService.classifyTimeSeries(finalDf, linearSupportVectorMachineSpec, temporalLearningSetting)
+  } yield {
+    val ((lrTrainingAccuracy, lrTestAccuracy), (lrTrainingAUROC, lrTestAUROC)) = calcMeanAccuracyAndAUROC(lrResults)
+    val ((rfTrainingAccuracy, rfTestAccuracy), (rfTrainingAUROC, rfTestAUROC)) = calcMeanAccuracyAndAUROC(rfResults)
+    val ((lsvmTrainingAccuracy, lsvmTestAccuracy), (lsvmTrainingAUROC, lsvmTestAUROC)) = calcMeanAccuracyAndAUROC(lsvmResults)
+
+
+    println(s"Logistic Regression Accuracy: $lrTrainingAccuracy / $lrTestAccuracy")
+    println(s"Logistic Regression    AUROC: $lrTrainingAUROC / $lrTestAUROC")
+    println(s"Random Forest       Accuracy: $rfTrainingAccuracy / $rfTestAccuracy")
+    println(s"Random Forest          AUROC: $rfTrainingAUROC / $rfTestAUROC")
+    println(s"Linear SVM          Accuracy: $lsvmTrainingAccuracy / $lsvmTestAccuracy")
+    println(s"Linear SVM             AUROC: $lsvmTrainingAUROC / $lsvmTestAUROC")
   }
 })

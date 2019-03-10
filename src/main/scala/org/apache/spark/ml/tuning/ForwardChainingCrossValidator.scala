@@ -48,6 +48,10 @@ class ForwardChainingCrossValidator(override val uid: String)
 
   def setMinTrainingSizeRatio(value: Double): this.type = set(minTrainingSizeRatio, value)
 
+  protected final val predictionsProcessor: Param[DataFrame => DataFrame] = new Param[DataFrame => DataFrame](this, "predictionsProcessor", "predictions processor")
+
+  def setPredictionsProcessor(value: DataFrame => DataFrame): this.type = set(predictionsProcessor, value)
+
   // can be removed
   private def splitFolds(dataset: Dataset[_]): Array[(Dataset[_], Dataset[_])] = {
     val sparkSession = dataset.sparkSession
@@ -84,6 +88,7 @@ class ForwardChainingCrossValidator(override val uid: String)
 
     val est = $(estimator)
     val eval = $(evaluator)
+    val processor = get(predictionsProcessor).getOrElse(identity[DataFrame](_))
     val epm = $(estimatorParamMaps)
     val numModels = epm.length
     val metrics = new Array[Double](epm.length)
@@ -112,7 +117,8 @@ class ForwardChainingCrossValidator(override val uid: String)
         val validationPredictions = calcTestPredictions(models(i), validationDataset, fullDataset, epm(i))
         if (validationPredictions.count() == 0)
           throw new IncalSparkMLException(s"Got no validation predictions for a forward-chaining cross validation. Perhaps the validation set with ${validationDataset.count} rows is too short.")
-        val metric = eval.evaluate(validationPredictions)
+
+        val metric = eval.evaluate(processor(validationPredictions))
         logDebug(s"Got metric $metric for model trained with ${epm(i)}.")
         metrics(i) += metric
         i += 1

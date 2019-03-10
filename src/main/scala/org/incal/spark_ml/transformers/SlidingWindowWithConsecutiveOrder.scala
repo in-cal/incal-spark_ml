@@ -38,8 +38,6 @@ private class SlidingWindowWithConsecutiveOrder(override val uid: String) extend
   private val tempInputColPrefix = Random.nextLong()
 
   override def transform(dataset: Dataset[_]): DataFrame = {
-    println(s"Window Size: ${$(windowSize)}.")
-
     require($(windowSize) > 0, "Window size must be a positive integer.")
 
     val df = dataset.toDF()

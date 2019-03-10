@@ -21,7 +21,6 @@ class DropSeriesLeft(override val uid: String) extends Transformer with DefaultP
   def setOrderCol(value: String): this.type = set(orderCol, value)
 
   override def transform(dataset: Dataset[_]): DataFrame = {
-    println("Drop left count: " + get(count))
     val minOrder = dataset.agg(min($(orderCol))).head.getInt(0)
     dataset.where(dataset($(orderCol)) > minOrder + $(count)).toDF()
   }

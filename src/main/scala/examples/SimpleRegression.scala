@@ -13,19 +13,19 @@ import scala.concurrent.ExecutionContext.Implicits.global
 object SimpleRegression extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {
-    val sepalLength, sepalWidth, petalLength, petalWidth, clazz = Value
+    val Sex, Length, Diameter, Height, WholeWeight, ShuckedWeight, VisceraWeight, ShellWeight, Rings = Value
   }
 
   val columnNames = Column.values.toSeq.sortBy(_.id).map(_.toString)
-  val outputColumnName = Column.sepalLength.toString
+  val outputColumnName = Column.Rings.toString
   val featureColumnNames = columnNames.filter(_ != outputColumnName)
 
-  // read csv and create a data frame with given column names
-  val url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+  // read a csv and create a data frame with given column names
+  val url = "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
-  // index the clazz column since it's of the string type
-  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
+  // index the sex column since it's of the string type
+  val df2 = indexStringCols(Seq((Column.Sex.toString, Nil)))(df)
 
   // turn the data frame into ML-ready one with features and a label
   val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)

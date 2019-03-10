@@ -90,7 +90,6 @@ private class RCStatesWindow(override val uid: String, reservoirRunnableFactory:
 
   // create RC network runnable with input nodes and reservoir nodes
   protected lazy val (networkRunnable, inputNodes, reservoirNodes) = {
-    println("Creating RC networkRunnable")
     reservoirRunnableFactory(ReservoirSetting(
       inputNodeNum = $(inputNodeNum),
       bias = $(bias),
@@ -114,12 +113,9 @@ private class RCStatesWindow(override val uid: String, reservoirRunnableFactory:
   }
 
   override def transform(dataset: Dataset[_]): DataFrame = {
-    println("Reservoir Node Num        : " + get(reservoirNodeNum))
-    println("Reservoir Spectral Radius : " + get(reservoirSpectralRadius))
-    println("Network Time              : " + networkRunnable.currentTime)
-    println("Network Hash Code         : " + networkRunnable.hashCode())
+//    println("Network Time              : " + networkRunnable.currentTime)
+//    println("Network Hash Code         : " + networkRunnable.hashCode())
     val reservoirStates = reservoirNodes.map(outputNode => networkRunnable.getState(outputNode): Double).mkString(", ")
-    println("Reservoir states          : " + reservoirStates)
 
     // create a network state agg fun
     val rcAggFun = new NetworkStateVectorAgg(networkRunnable, inputNodes, reservoirNodes)
