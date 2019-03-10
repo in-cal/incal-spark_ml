@@ -59,6 +59,9 @@ private class SeqShiftWithConsecutiveOrder(override val uid: String) extends Tra
     require(!existingFields.exists(_.name == outputColName),
       s"Output column $outputColName already exists.")
 
+    require(existingFields.exists(_.name == $(orderCol)),
+      s"Order column ${$(orderCol)} doesn't exist.")
+
     schema.add(outputField)
   }
 }

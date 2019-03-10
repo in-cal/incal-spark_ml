@@ -10,25 +10,25 @@ import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object LalaRegression extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
+object SimpleRegression extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {
     val sepalLength, sepalWidth, petalLength, petalWidth, clazz = Value
   }
 
   val columnNames = Column.values.toSeq.sortBy(_.id).map(_.toString)
-  val outputColumnName = Column.clazz.toString
+  val outputColumnName = Column.sepalLength.toString
   val featureColumnNames = columnNames.filter(_ != outputColumnName)
 
   // read csv and create a data frame with given column names
-  val url = "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+  val url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
-  // turn the data frame into ML-ready one with features and a label
-  val df2 = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df)
+  // index the clazz column since it's of the string type
+  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
 
-  // index the label column since it's a string
-  val finalDf = indexStringCols(Seq(("label", Nil)))(df2)
+  // turn the data frame into ML-ready one with features and a label
+  val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)
 
   // linear regression spec
   val linearRegressionSpec = LinearRegression(

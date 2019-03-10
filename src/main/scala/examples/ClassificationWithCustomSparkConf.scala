@@ -1,16 +1,17 @@
 package examples
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.TreeCore
 import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, LogisticModelFamily, LogisticRegression, RandomForest}
-import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
-import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.result.ClassificationResultsHolder
 import org.incal.spark_ml.models.setting.ClassificationLearningSetting
+import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object IrisClassification extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
+object ClassificationWithCustomSparkConf extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {
     val sepalLength, sepalWidth, petalLength, petalWidth, clazz = Value
@@ -21,14 +22,14 @@ object IrisClassification extends SparkMLApp((session: SparkSession, mlService: 
   val featureColumnNames = columnNames.filter(_ != outputColumnName)
 
   // read csv and create a data frame with given column names
-  val url = "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+  val url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
-  // turn the data frame into ML-ready one with features and a label
-  val df2 = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df)
+  // index the clazz column since it's of the string type
+  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
 
-  // index the label column since it's a string
-  val finalDf = indexStringCols(Seq(("label", Nil)))(df2)
+  // turn the data frame into ML-ready one with features and a label
+  val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)
 
   // random forest spec
   val randomForestSpec = RandomForest(
@@ -66,8 +67,6 @@ object IrisClassification extends SparkMLApp((session: SparkSession, mlService: 
     println(s"Random forest       (accuracy): $rfTrainingAccuracy / $rfTestAccuracy")
     println(s"Logistic regression (accuracy): $lrTrainingAccuracy / $lrTestAccuracy")
   }
-})
-
-//{
-//  override def conf = new SparkConf().setMaster("local[*]").setAppName("Test-LALALA")
-//}
+}) {
+  override val conf = new SparkConf().setMaster("local[*]").setAppName("My-Ultimate-Spark-Grid")
+}

@@ -139,6 +139,9 @@ private class RCStatesWindow(override val uid: String, reservoirRunnableFactory:
     require(!existingFields.exists(_.name == $(outputCol)),
       s"Output column ${$(outputCol)} already exists.")
 
+    require(existingFields.exists(_.name == $(orderCol)),
+      s"Order column ${$(orderCol)} doesn't exist.")
+
     schema.add(StructField($(outputCol), SQLDataTypes.VectorType, true))
   }
 }

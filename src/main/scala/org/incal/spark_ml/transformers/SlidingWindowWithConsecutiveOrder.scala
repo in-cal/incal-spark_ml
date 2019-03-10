@@ -2,12 +2,14 @@ package org.incal.spark_ml.transformers
 
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.SQLDataTypes
-import org.apache.spark.ml.{Estimator, Pipeline, PipelineModel, Transformer}
+import org.apache.spark.ml._
 import org.apache.spark.ml.param.{Param, ParamMap}
 import org.apache.spark.ml.util.{DefaultParamsWritable, Identifiable}
 import org.apache.spark.sql.{DataFrame, Dataset}
 import org.apache.spark.sql.types._
-import org.incal.spark_ml.SparkUtil
+import org.incal.spark_ml.SparkUtil.transformInPlaceWithParamGrids
+import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
+import org.incal.spark_ml.{ParamGrid, ParamSourceBinder, SparkUtil}
 
 import scala.util.Random
 
@@ -36,6 +38,8 @@ private class SlidingWindowWithConsecutiveOrder(override val uid: String) extend
   private val tempInputColPrefix = Random.nextLong()
 
   override def transform(dataset: Dataset[_]): DataFrame = {
+    println(s"Window Size: ${$(windowSize)}.")
+
     require($(windowSize) > 0, "Window size must be a positive integer.")
 
     val df = dataset.toDF()
@@ -86,6 +90,9 @@ private class SlidingWindowWithConsecutiveOrder(override val uid: String) extend
     require(!existingFields.exists(_.name == $(outputCol)),
       s"Output column ${$(outputCol)} already exists.")
 
+    require(existingFields.exists(_.name == $(orderCol)),
+      s"Order column ${$(orderCol)} doesn't exist.")
+
     schema.add(StructField($(outputCol), SQLDataTypes.VectorType, true))
   }
 }
@@ -97,16 +104,23 @@ object SlidingWindowWithConsecutiveOrder {
     orderCol: String,
     outputCol: String,
     groupCol: Option[String] = None)(
-    windowSize: Int
-  ): Transformer = new SlidingWindowWithConsecutiveOrder().setWindowSize(windowSize).setInputCol(inputCol).setOrderCol(orderCol).setOutputCol(outputCol).setGroupCol(groupCol)
+    windowSize: ValueOrSeq[Int]
+  ): (Transformer, Traversable[ParamGrid[_]]) =
+    ParamSourceBinder(windowSize, new SlidingWindowWithConsecutiveOrder())
+      .bindConstP(inputCol, _.inputCol)
+      .bindConstP(orderCol, _.orderCol)
+      .bindConstP(outputCol, _.outputCol)
+      .bindP(_ => groupCol, _.groupCol)
+      .bindValOrSeqP(identity, _.windowSize)
+      .build
 
   def applyInPlace(
     inputOutputCol: String,
     orderCol: String,
     groupCol: Option[String] = None)(
-    windowSize: Int
-  ): Estimator[PipelineModel] =
-    SparkUtil.transformInPlace(
+    windowSize: ValueOrSeq[Int]
+  ): (PipelineStage, Traversable[ParamGrid[_]]) =
+    transformInPlaceWithParamGrids(
       apply(inputOutputCol, orderCol, _, groupCol)(windowSize),
       inputOutputCol
     )

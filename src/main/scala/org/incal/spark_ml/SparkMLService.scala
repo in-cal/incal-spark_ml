@@ -408,37 +408,50 @@ trait SparkMLService extends MLBase {
     groupIdColumnName: Option[String],
     setting: TemporalLearningSetting
   ): (Seq[() => PipelineStage], Traversable[ParamGrid[_]]) = {
-    if (setting.slidingWindowSize.isEmpty && setting.reservoirSetting.isEmpty)
+    val slidingWindowUndefined = setting.slidingWindowSize.isLeft && setting.slidingWindowSize.left.get.isEmpty
+
+    if (slidingWindowUndefined && setting.reservoirSetting.isEmpty)
       logger.warn("Sliding window size or reservoir setting should be set for time series transformations.")
 
-    val dlTransformer = setting.slidingWindowSize.map(
-      if (useConsecutiveOrderForDL)
-        SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, groupIdColumnName)
-      else
-        SlidingWindow.applyInPlace("features", seriesOrderCol, groupIdColumnName)
-    )
+    // sliding window transformer
+    val swTransformerWithParamGrids =
+      if (!slidingWindowUndefined) {
+        val swConstructor = if (useConsecutiveOrderForDL)
+          SlidingWindowWithConsecutiveOrder.applyInPlace("features", seriesOrderCol, groupIdColumnName)(_)
+        else
+          SlidingWindow.applyInPlace("features", seriesOrderCol, groupIdColumnName)(_)
 
+        Some(swConstructor(setting.slidingWindowSize))
+      } else
+        None
+
+    val swTransformer = swTransformerWithParamGrids.map(_._1)
+    val swParamGrids = swTransformerWithParamGrids.map(_._2).getOrElse(Nil)
+
+    // reservoir transformer
     if (setting.reservoirSetting.isDefined && groupIdColumnName.isDefined)
       throw new IncalSparkMLException(s"Reservoir processing defined together with a grouping by the column ${groupIdColumnName.get}. This combination is currently unsupported.")
 
     val rcTransformerWithParamGrids = setting.reservoirSetting.map(rcStatesWindowFactory.applyInPlace("features", seriesOrderCol))
 
     val rcTransformer = rcTransformerWithParamGrids.map(_._1)
-    val paramGrids = rcTransformerWithParamGrids.map(_._2).getOrElse(Nil)
+    val rcParamGrids = rcTransformerWithParamGrids.map(_._2).getOrElse(Nil)
 
+    // label shift
     val labelShiftTransformer =
       if (useConsecutiveOrderForDL)
         SeqShiftWithConsecutiveOrder.applyInPlace("label", seriesOrderCol, groupIdColumnName)(setting.predictAhead)
       else
         SeqShift.applyInPlace("label", seriesOrderCol, groupIdColumnName)(setting.predictAhead)
 
+    // put all the transformers together
     val stages = Seq(
-      dlTransformer.map(() => _),
+      swTransformer.map(() => _),
       rcTransformer.map(() => _),
       Some(() => labelShiftTransformer)
     ).flatten
 
-    (stages, paramGrids)
+    (stages, swParamGrids ++ rcParamGrids)
   }
 
   private def randomSplit(setting: LearningSetting[_]): DataFrame => (DataFrame, DataFrame) =

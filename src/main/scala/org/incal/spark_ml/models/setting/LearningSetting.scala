@@ -1,5 +1,6 @@
 package org.incal.spark_ml.models.setting
 
+import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
 import org.incal.spark_ml.models.{ReservoirSpec, VectorScalerType}
 
 trait LearningSetting[T] {
@@ -13,7 +14,7 @@ trait LearningSetting[T] {
 
 trait TemporalLearningSetting {
   val predictAhead: Int
-  val slidingWindowSize: Option[Int]
+  val slidingWindowSize: ValueOrSeq[Int]
   val reservoirSetting: Option[ReservoirSpec]
   val minCrossValidationTrainingSizeRatio: Option[Double]
   val trainingTestSplitOrderValue: Option[Double]

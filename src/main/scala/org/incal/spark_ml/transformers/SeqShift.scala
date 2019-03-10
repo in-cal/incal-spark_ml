@@ -1,13 +1,13 @@
 package org.incal.spark_ml.transformers
 
-import org.apache.spark.ml.{Estimator, PipelineModel, Transformer}
+import org.apache.spark.ml.{Estimator, PipelineModel, PipelineStage, Transformer}
 import org.apache.spark.ml.param.{Param, ParamMap, ParamValidators}
 import org.apache.spark.ml.util.{DefaultParamsWritable, Identifiable}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.{DataFrame, Dataset}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions.{col, last}
-import org.incal.spark_ml.SparkUtil.transformInPlace
+import org.incal.spark_ml.SparkUtil.{transformInPlace, transformInPlaceWithParamGrids}
 
 /**
   * Moves each input column value of a data frame with an order column to a next row defined by a given shift.
@@ -32,7 +32,6 @@ private class SeqShift(override val uid: String) extends Transformer with Defaul
   def setGroupCol(value: Option[String]) = value.map(set(groupCol, _)).getOrElse(SeqShift.this)
 
   override def transform(dataset: Dataset[_]): DataFrame = {
-
     // data frame with a sliding window
     val windowBaseSpec = get(groupCol) match {
       case Some(groupCol) => Window.partitionBy(groupCol).orderBy($(orderCol))
@@ -69,6 +68,9 @@ private class SeqShift(override val uid: String) extends Transformer with Defaul
 
     require(!existingFields.exists(_.name == outputColName),
       s"Output column $outputColName already exists.")
+
+    require(existingFields.exists(_.name == $(orderCol)),
+      s"Order column ${$(orderCol)} doesn't exist.")
 
     schema.add(outputField)
   }

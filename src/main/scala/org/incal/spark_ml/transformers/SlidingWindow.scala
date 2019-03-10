@@ -1,6 +1,6 @@
 package org.incal.spark_ml.transformers
 
-import org.apache.spark.ml.{Estimator, Pipeline, PipelineModel, Transformer}
+import org.apache.spark.ml._
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param.{Param, ParamMap}
 import org.apache.spark.ml.util.{DefaultParamsWritable, Identifiable}
@@ -8,7 +8,9 @@ import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.{DataFrame, Dataset}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions.{collect_list, _}
-import org.incal.spark_ml.SparkUtil.{assembleVectors, transformInPlace}
+import org.incal.spark_ml.{ParamGrid, ParamSourceBinder}
+import org.incal.spark_ml.SparkUtil.{assembleVectors, transformInPlace, transformInPlaceWithParamGrids}
+import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
 
 /**
   * Handy transformer that turns a data frame with an order column, such as time,
@@ -39,6 +41,7 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
   private def seqSizeEq(size: Int) = udf { seq: Seq[_] => seq.size == size }
 
   override def transform(dataset: Dataset[_]): DataFrame = {
+    println(s"Window Size: ${$(windowSize)}.")
     require($(windowSize) > 0, "Window size must be a positive integer.")
 
     val inputType = dataset.schema($(inputCol)).dataType
@@ -80,6 +83,9 @@ private class SlidingWindow(override val uid: String) extends Transformer with D
     require(!existingFields.exists(_.name == outputColName),
       s"Output column $outputColName already exists.")
 
+    require(existingFields.exists(_.name == $(orderCol)),
+      s"Order column ${$(orderCol)} doesn't exist.")
+
     schema.add(StructField(outputColName, outputType, true))
   }
 }
@@ -91,16 +97,23 @@ object SlidingWindow {
     orderCol: String,
     outputCol: String,
     groupCol: Option[String] = None)(
-    windowSize: Int
-  ): Transformer = new SlidingWindow().setWindowSize(windowSize).setInputCol(inputCol).setOrderCol(orderCol).setOutputCol(outputCol).setGroupCol(groupCol)
+    windowSize: ValueOrSeq[Int]
+  ): (Transformer, Traversable[ParamGrid[_]]) =
+    ParamSourceBinder(windowSize, new SlidingWindow())
+      .bindConstP(inputCol, _.inputCol)
+      .bindConstP(orderCol, _.orderCol)
+      .bindConstP(outputCol, _.outputCol)
+      .bindP(_ => groupCol, _.groupCol)
+      .bindValOrSeqP(identity, _.windowSize)
+      .build
 
   def applyInPlace(
     inputOutputCol: String,
     orderCol: String,
     groupCol: Option[String] = None)(
-    windowSize: Int
-  ): Estimator[PipelineModel] =
-    transformInPlace(
+    windowSize: ValueOrSeq[Int]
+  ): (PipelineStage, Traversable[ParamGrid[_]]) =
+    transformInPlaceWithParamGrids(
       apply(inputOutputCol, orderCol, _, groupCol)(windowSize),
       inputOutputCol
     )

@@ -1,6 +1,6 @@
 package org.incal.spark_ml
 
-import examples.IrisClassification._
+import examples.SimpleClassification._
 import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.ml.{Estimator, Pipeline, PipelineModel, PipelineStage}
 import org.apache.spark.sql._

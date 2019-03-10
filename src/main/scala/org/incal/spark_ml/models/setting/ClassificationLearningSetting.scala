@@ -1,5 +1,6 @@
 package org.incal.spark_ml.models.setting
 
+import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
 import org.incal.spark_ml.models.{ReservoirSpec, VectorScalerType}
 import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, Classifier}
 
@@ -18,7 +19,7 @@ case class ClassificationLearningSetting(
 case class TemporalClassificationLearningSetting(
   core: ClassificationLearningSetting = ClassificationLearningSetting(),
   predictAhead: Int = 1,
-  slidingWindowSize: Option[Int] = None,
+  slidingWindowSize: ValueOrSeq[Int] = Left(None),
   reservoirSetting: Option[ReservoirSpec] = None,
   minCrossValidationTrainingSizeRatio: Option[Double] = None,
   trainingTestSplitOrderValue: Option[Double] = None

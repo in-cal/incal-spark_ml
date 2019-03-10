@@ -1,6 +1,5 @@
 package examples
 
-import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.TreeCore
@@ -11,7 +10,8 @@ import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-object IrisClassificationWithCustomSparkConf extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
+// Warning: Might take ~15 mins or so to run, adjust the number of repetitions if needed
+object ClassificationWithCrossValidation extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {
     val sepalLength, sepalWidth, petalLength, petalWidth, clazz = Value
@@ -25,27 +25,26 @@ object IrisClassificationWithCustomSparkConf extends SparkMLApp((session: SparkS
   val url = "http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
   val df = remoteCsvToDataFrame(url, false)(session).toDF(columnNames :_*)
 
+  // index the clazz column since it's of the string type
+  val df2 = indexStringCols(Seq(("clazz", Nil)))(df)
+
   // turn the data frame into ML-ready one with features and a label
-  val df2 = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df)
+  val finalDf = prepFeaturesDataFrame(featureColumnNames.toSet, Some(outputColumnName))(df2)
 
-  // index the label column since it's a string
-  val finalDf = indexStringCols(Seq(("label", Nil)))(df2)
-
-  // random forest spec
-  val randomForestSpec = RandomForest(
-    core = TreeCore(maxDepth = Left(Some(5)))
-  )
-
-  // logistic regression spec
+  // logistic regression spec; note that regularization and elasticMixingRatio are defined by value sequences,
+  // which will be used for a param-grid cross-validation model selection
   val logisticRegressionSpec = LogisticRegression(
     family = Some(LogisticModelFamily.Multinomial),
-    maxIteration = Left(Some(200)),
-    regularization = Left(Some(0.3)),
-    elasticMixingRatio = Left(Some(0.8))
+    regularization = Right(Seq(0, 0.1, 0.01)),
+    elasticMixingRatio = Right(Seq(0, 0.5, 1))
   )
 
   // learning setting
-  val learningSetting = ClassificationLearningSetting(repetitions = Some(10))
+  val learningSetting = ClassificationLearningSetting(
+    repetitions = Some(5),
+    crossValidationFolds = Some(5),
+    crossValidationEvalMetric = Some(ClassificationEvalMetric.accuracy)
+  )
 
   // aux function to get a mean training and test accuracy
   def calcMeanAccuracy(results: ClassificationResultsHolder) = {
@@ -55,18 +54,11 @@ object IrisClassificationWithCustomSparkConf extends SparkMLApp((session: SparkS
   }
 
   for {
-    // run the random forest and get results
-    randomForestResults <- mlService.classify(finalDf, randomForestSpec, learningSetting)
-
     // run the logistic regression and get results
     logisticRegressionResults <- mlService.classify(finalDf, logisticRegressionSpec, learningSetting)
   } yield {
-    val (rfTrainingAccuracy, rfTestAccuracy) = calcMeanAccuracy(randomForestResults)
     val (lrTrainingAccuracy, lrTestAccuracy) = calcMeanAccuracy(logisticRegressionResults)
 
-    println(s"Random forest       (accuracy): $rfTrainingAccuracy / $rfTestAccuracy")
     println(s"Logistic regression (accuracy): $lrTrainingAccuracy / $lrTestAccuracy")
   }
-}) {
-  override val conf = new SparkConf().setMaster("local[*]").setAppName("My-Ultimate-Spark-Grid")
-}
+})

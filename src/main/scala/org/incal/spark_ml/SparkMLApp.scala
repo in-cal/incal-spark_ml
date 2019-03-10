@@ -5,11 +5,16 @@ import com.google.inject.Guice
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Dataset, SparkSession}
 import net.codingwell.scalaguice.InjectorExtensions._
+import org.slf4j.LoggerFactory
 
-import scala.concurrent.{Future, Await}
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success}
 
 class SparkMLApp(execute: (SparkSession, SparkMLService) => Future[Unit]) extends App {
+
+  protected val logger = LoggerFactory.getLogger("Spark-ML-App")
 
   protected def conf = new SparkConf(false)
     .setMaster("local[*]")
@@ -21,12 +26,21 @@ class SparkMLApp(execute: (SparkSession, SparkMLService) => Future[Unit]) extend
 
   private def createSession = SparkSession.builder().config(conf).getOrCreate()
 
+  protected def mlServiceSetting = SparkMLServiceSetting(debugMode = false)
+
   private def createMLService = {
     val injector = Guice.createInjector(new NetworkModule())
     val factory = injector.instance[SparkMLServiceFactory]
-    factory(SparkMLServiceSetting())
+    factory(mlServiceSetting)
   }
 
-  // run the execute method with a newly create ML service
-  Await.ready(execute(createSession, createMLService), 1.hour)
+  // run the execute method with a newly created ML service
+  private val future = execute(createSession, createMLService)
+
+  future.onComplete {
+    case Success(_) => logger.info("Spark app finished successfully.")
+    case Failure(t) => logger.error("An error has occurred: " + t.getMessage)
+  }
+
+  Await.ready(future, 1.hour)
 }

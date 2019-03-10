@@ -18,6 +18,9 @@ trait MLBase {
   }
 
   protected val seqSplit = (orderColumn: String) => (splitRatio: Double) => (df: DataFrame) => {
+    if (!df.columns.contains(orderColumn))
+      throw new IncalSparkMLException(s"Order column '$orderColumn' does not exist.")
+
     val splitValue = df.stat.approxQuantile(orderColumn, Array(splitRatio), 0.001)(0)
     val headDf = df.where(df(orderColumn) <= splitValue)
     val tailDf = df.where(df(orderColumn) > splitValue)
@@ -25,6 +28,9 @@ trait MLBase {
   }
 
   protected val splitByValue = (orderColumn: String) => (splitValue: Double) => (df: DataFrame) => {
+    if (!df.columns.contains(orderColumn))
+      throw new IncalSparkMLException(s"Order column '$orderColumn' does not exist.")
+
     val headDf = df.where(df(orderColumn) <= splitValue)
     val tailDf = df.where(df(orderColumn) > splitValue)
     (headDf, tailDf)
