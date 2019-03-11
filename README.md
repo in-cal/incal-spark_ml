@@ -4,7 +4,7 @@ This is an extension of Spark ML library (version *2.2.0*) providing:
 
 * Integrated service with a configurable classification and regression execution, cross-validation, and pre-processing.
 * Several handy transformers and evaluators.
-* Extension of classification and regression for a temporal domain by two kernels (can be combined): a sliding window (delay line) and a reservoir computing network with various topologies and activiation functions.
+* Extension of classification and regression for the temporal domain mainly by two kernels (can be combined): a sliding window (delay line) and a reservoir computing network with various topologies and activiation functions.
 * Convenient customizable pipeline execution.
 * Summary evaluation metrics 
 
