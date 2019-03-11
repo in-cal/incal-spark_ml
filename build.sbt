@@ -26,15 +26,15 @@ libraryDependencies ++= Seq(
 )
 
 // POM settings for Sonatype
+homepage := Some(url("https://ada.parkinson.lu"))
+
 publishMavenStyle := true
+
+scmInfo := Some(ScmInfo(url("https://github.com/peterbanda/incal-spark_ml"), "scm:git@github.com:peterbanda/incal-spark_ml.git"))
 
 developers := List(Developer("bnd", "Peter Banda", "peter.banda@protonmail.com", url("https://peterbanda.net")))
 
 licenses += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
-
-publishMavenStyle := true
-
-// publishTo := sonatypePublishTo.value
 
 publishTo := Some(
   if (isSnapshot.value)
