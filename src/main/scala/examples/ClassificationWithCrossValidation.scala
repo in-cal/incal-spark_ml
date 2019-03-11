@@ -35,7 +35,7 @@ object ClassificationWithCrossValidation extends SparkMLApp((session: SparkSessi
   // which will be used for a param-grid cross-validation model selection
   val logisticRegressionSpec = LogisticRegression(
     family = Some(LogisticModelFamily.Multinomial),
-    regularization = Right(Seq(0, 0.1, 0.01)),
+    regularization = Right(Seq(1, 0.1, 0.01)),
     elasticMixingRatio = Right(Seq(0, 0.5, 1))
   )
 

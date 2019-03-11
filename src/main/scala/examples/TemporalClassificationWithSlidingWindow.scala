@@ -12,6 +12,7 @@ import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService, SparkMLServ
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
+// Warning: Might take > 30 mins or so to run, adjust the number of param values to reduce the time
 object TemporalClassificationWithSlidingWindow extends SparkMLApp((session: SparkSession, mlService: SparkMLService) => {
 
   object Column extends Enumeration {

@@ -5,7 +5,6 @@ import com.banda.network.domain.ActivationFunctionType
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.BooleanType
 import org.incal.spark_ml.SparkUtil._
-import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
 import org.incal.spark_ml.models.{ReservoirSpec, VectorScalerType}
 import org.incal.spark_ml.models.classification.{ClassificationEvalMetric, LogisticModelFamily, LogisticRegression, MultiLayerPerceptron}
 import org.incal.spark_ml.models.result.ClassificationResultsHolder
