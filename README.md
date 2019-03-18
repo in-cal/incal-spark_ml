@@ -42,7 +42,7 @@ as well as example classifications and regressions for temporal problems:
 * [Temporal regression with a sliding window (delay line)](src/main/scala/examples/TemporalRegressionWithSlidingWindow.scala) - for S&P time series
 * [Temporal regression with a reservoir kernel](src/main/scala/examples/TemporalRegressionWithReservoirKernel.scala) - for S&P time series
 
-Note that time-series classifications (and precitions) using convolutional neural networks and LSTMs are served by <a href="https://github.com/peterbanda/incal-dl4j">InCal DL4J library</a>.
+Note that time-series classifications (and predictions) using convolutional neural networks and LSTMs are served by <a href="https://github.com/peterbanda/incal-dl4j">InCal DL4J library</a>.
 
 #### Acknowledgement
 
