@@ -10,7 +10,7 @@ This is an extension of Spark ML library (version *2.2.0*) providing:
 
 #### Installation
 
-All you need is **Scala 2.11**. To pull the library you need to add the following dependency to *build.sbt*
+All you need is **Scala 2.11**. To pull the library you have to add the following dependency to *build.sbt*
 
 ```
 "org.in-cal" %% "incal-spark_ml" % "0.1.0"
