@@ -27,7 +27,7 @@ trait SparkMLService extends MLBase {
   val rcStatesWindowFactory: RCStatesWindowFactory
   val setting: SparkMLServiceSetting
 
-  protected val logger = LoggerFactory.getLogger("ml")
+  protected val logger = LoggerFactory.getLogger("spark_ml")
 
   // consts
   protected val defaultTrainingTestingSplitRatio = 0.8
@@ -158,7 +158,8 @@ trait SparkMLService extends MLBase {
     val originalFeaturesType = df.schema.fields.find(_.name == "features").get
     val originalInputSize = originalFeaturesType.metadata.getMetadata("ml_attr").getLong("num_attrs").toInt
     val inputSize = kernelSize(setting.pcaDims.getOrElse(originalInputSize))
-    println(s"Input Size: ${inputSize}.")
+
+    logger.debug(s"Input Size: ${inputSize}.")
 
     val outputLabelType = df.schema.fields.find(_.name == "label").get
     val outputSize = outputLabelType.metadata.getMetadata("ml_attr").getStringArray("vals").length
@@ -713,10 +714,10 @@ trait SparkMLService extends MLBase {
       testDf.cache()
 
       if (setting.debugMode) {
-        println(s"Training Data Set (# ${trainingDf.count}):\n")
+        logger.debug(s"Training Data Set (# ${trainingDf.count}):\n")
         trainingDf.show(truncate = false)
 
-        println(s"Test Data Set (# ${testDf.count}):\n")
+        logger.debug(s"Test Data Set (# ${testDf.count}):\n")
         testDf.show(truncate = false)
       }
 
@@ -732,10 +733,10 @@ trait SparkMLService extends MLBase {
       logger.info("Obtained training/test predictions as: " + trainingPredictions.count() + " / " + testPredictions.count())
 
       if (setting.debugMode) {
-        println(s"Training Predictions (# ${trainingPredictions.count}):\n")
+        logger.debug(s"Training Predictions (# ${trainingPredictions.count}):\n")
         trainingPredictions.show(truncate = false)
 
-        println(s"Test Predictions (# ${testPredictions.count}):\n")
+        logger.debug(s"Test Predictions (# ${testPredictions.count}):\n")
         testPredictions.show(truncate = false)
       }
 

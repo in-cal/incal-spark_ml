@@ -18,12 +18,15 @@ import org.incal.spark_ml.{IncalSparkMLException, MLBase}
 
 import scala.collection.JavaConverters._
 import org.json4s.DefaultFormats
+import org.slf4j.LoggerFactory
 
 // TODO: could be substantially simplified if CrossValidator provides "splits" function that can be overridden, plus the model would need to be generic
 class ForwardChainingCrossValidator(override val uid: String)
   extends Estimator[ForwardChainingCrossValidatorModel]
     with MLBase
     with CrossValidatorParams with MLWritable with Logging {
+
+  private val logger = LoggerFactory.getLogger("spark_ml")
 
   @Since("1.2.0")
   def this() = this(Identifiable.randomUID("forward_cv"))
@@ -73,7 +76,7 @@ class ForwardChainingCrossValidator(override val uid: String)
       dataset.stat.approxQuantile($(orderCol), Array($(minTrainingSizeRatio) + i * stepSize), 0.001)(0)
 
     splitValues.zip(splitValues.tail ++ Seq(maxOrderValue: Double)).map { case (trainingSplitValue, validationSplitValue) =>
-      println(s"Training <= $trainingSplitValue, validation > $trainingSplitValue && <= $validationSplitValue")
+      logger.info(s"Splitting forward as: training <= $trainingSplitValue, validation > $trainingSplitValue && <= $validationSplitValue")
       val trainingSet = dataset.where(dataset($(orderCol)) <= trainingSplitValue)
       val validationSet = dataset.where(dataset($(orderCol)) > trainingSplitValue and dataset($(orderCol)) <= validationSplitValue)
       val fullSet = dataset.where(dataset($(orderCol)) <= validationSplitValue)

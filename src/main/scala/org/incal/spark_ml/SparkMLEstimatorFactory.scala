@@ -65,7 +65,7 @@ object SparkMLEstimatorFactory extends SparkMLEstimatorFactoryHelper {
     inputSize: Int,
     outputSize: Int
   ): (MultilayerPerceptronClassifier, Traversable[ParamGrid[_]]) = {
-    println(s"Input: $inputSize, output: $outputSize")
+//    println(s"Input: $inputSize, output: $outputSize")
     val layers = (Seq(inputSize) ++ model.hiddenLayers ++ Seq(outputSize)).toArray
 
     ParamSourceBinder(model, new MultilayerPerceptronClassifier())

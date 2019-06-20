@@ -115,7 +115,7 @@ private class RCStatesWindow(override val uid: String, reservoirRunnableFactory:
   override def transform(dataset: Dataset[_]): DataFrame = {
 //    println("Network Time              : " + networkRunnable.currentTime)
 //    println("Network Hash Code         : " + networkRunnable.hashCode())
-    val reservoirStates = reservoirNodes.map(outputNode => networkRunnable.getState(outputNode): Double).mkString(", ")
+//    val reservoirStates = reservoirNodes.map(outputNode => networkRunnable.getState(outputNode): Double).mkString(", ")
 
     // create a network state agg fun
     val rcAggFun = new NetworkStateVectorAgg(networkRunnable, inputNodes, reservoirNodes)
