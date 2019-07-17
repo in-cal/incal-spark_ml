@@ -3,7 +3,7 @@ package org.incal.spark_ml
 import org.apache.spark.sql.Encoders
 import org.apache.spark.ml.clustering.{BisectingKMeansModel, GaussianMixtureModel, KMeansModel, LDAModel}
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Evaluator, MulticlassClassificationEvaluator, RegressionEvaluator}
-import org.apache.spark.ml.{util, _}
+import org.apache.spark.ml.{Model, util, _}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
 import org.apache.spark.ml.linalg.{DenseVector, Vector}
@@ -779,8 +779,19 @@ trait SparkMLService extends MLBase {
     val dataFrame = pipeline.fit(df).transform(df)
 
     val cachedDf = dataFrame.cache()
+    val classes = fitClustersAndGetClasses(trainer, cachedDf, idColumnName)
 
-    val (model, predictions) = fit(trainer, cachedDf)
+    cachedDf.unpersist
+
+    (dataFrame, classes)
+  }
+
+  private def fitClustersAndGetClasses[M <: Model[M]](
+    estimator: Estimator[M],
+    data: DataFrame,
+    idColumnName: String
+  ): Traversable[(String, Int)] = {
+    val (model, predictions) = fit(estimator, data)
     predictions.cache()
 
     implicit val encoder = Encoders.tuple(Encoders.STRING, Encoders.scalaInt)
@@ -792,7 +803,7 @@ trait SparkMLService extends MLBase {
         (id, clazz + 1)
       }.collect
 
-    def extractClusterClasssedFromProbabilities(columnName: String): Traversable[(String, Int)] =
+    def extractClusterClassesFromProbabilities(columnName: String): Traversable[(String, Int)] =
       predictions.select(idColumnName, columnName).map { r =>
         val id = r(0).asInstanceOf[String]
         val clazz = r(1).asInstanceOf[DenseVector].values.zipWithIndex.maxBy(_._1)._2
@@ -804,19 +815,18 @@ trait SparkMLService extends MLBase {
         extractClusterClasses("prediction")
 
       case _: LDAModel =>
-        extractClusterClasssedFromProbabilities("topicDistribution")
+        extractClusterClassesFromProbabilities("topicDistribution")
 
       case _: BisectingKMeansModel =>
         extractClusterClasses("prediction")
 
       case _: GaussianMixtureModel =>
-        extractClusterClasssedFromProbabilities("probability")
+        extractClusterClassesFromProbabilities("probability")
     }
 
     predictions.unpersist()
-    cachedDf.unpersist
 
-    (dataFrame, result)
+    result
   }
 
   protected def fit[M <: Model[M]](

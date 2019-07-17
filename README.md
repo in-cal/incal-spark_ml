@@ -1,4 +1,4 @@
-# InCal Spark ML Library [![version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://in-cal.org) [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+# InCal Spark ML Library [![version](https://img.shields.io/badge/version-0.2.1-green.svg)](https://in-cal.org) [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This is an extension of Spark ML library (version *2.2.0*) providing:
 
@@ -13,7 +13,7 @@ This is an extension of Spark ML library (version *2.2.0*) providing:
 All you need is **Scala 2.11**. To pull the library you have to add the following dependency to *build.sbt*
 
 ```
-"org.in-cal" %% "incal-spark_ml" % "0.2.0"
+"org.in-cal" %% "incal-spark_ml" % "0.2.1"
 ```
 
 or to *pom.xml* (if you use maven)
@@ -22,7 +22,7 @@ or to *pom.xml* (if you use maven)
 <dependency>
     <groupId>org.in-cal</groupId>
     <artifactId>incal-spark_ml_2.11</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1</version>
 </dependency>
 ```
 
