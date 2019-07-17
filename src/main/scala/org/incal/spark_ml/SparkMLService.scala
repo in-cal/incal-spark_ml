@@ -1,11 +1,12 @@
 package org.incal.spark_ml
 
-import javax.inject.Inject
+import org.apache.spark.sql.Encoders
+import org.apache.spark.ml.clustering.{BisectingKMeansModel, GaussianMixtureModel, KMeansModel, LDAModel}
 import org.apache.spark.ml.evaluation.{BinaryClassificationEvaluator, Evaluator, MulticlassClassificationEvaluator, RegressionEvaluator}
 import org.apache.spark.ml.{util, _}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
-import org.apache.spark.ml.linalg.Vector
+import org.apache.spark.ml.linalg.{DenseVector, Vector}
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.tuning.ParamGridBuilder
 import org.apache.spark.sql.functions._
@@ -17,6 +18,8 @@ import org.incal.spark_ml.models.regression.{RegressionEvalMetric, Regressor}
 import org.incal.spark_ml.CrossValidatorFactory.{CrossValidatorCreator, CrossValidatorCreatorWithProcessor}
 import org.incal.spark_ml.models.result._
 import org.incal.core.util.{STuple3, parallelize}
+import org.incal.spark_ml.models.VectorScalerType
+import org.incal.spark_ml.models.clustering.Clustering
 import org.incal.spark_ml.models.setting._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -754,6 +757,79 @@ trait SparkMLService extends MLBase {
     }.getOrElse(
       trainAux(trainer)
     )
+  }
+
+  def cluster(
+    df: DataFrame,
+    idColumnName: String,
+    mlModel: Clustering,
+    featuresNormalizationType: Option[VectorScalerType.Value],
+    pcaDim: Option[Int]
+  ): (DataFrame, Traversable[(String, Int)]) = {
+    val trainer = SparkMLEstimatorFactory(mlModel)
+
+    // normalize
+    val normalize = featuresNormalizationType.map(VectorColumnScaler.applyInPlace(_, "features"))
+
+    // reduce the dimensionality if needed
+    val reduceDim = pcaDim.map(InPlacePCA(_))
+
+    val stages = Seq(normalize, reduceDim).flatten
+    val pipeline = new Pipeline().setStages(stages.toArray)
+    val dataFrame = pipeline.fit(df).transform(df)
+
+    val cachedDf = dataFrame.cache()
+
+    val (model, predictions) = fit(trainer, cachedDf)
+    predictions.cache()
+
+    implicit val encoder = Encoders.tuple(Encoders.STRING, Encoders.scalaInt)
+
+    def extractClusterClasses(columnName: String): Traversable[(String, Int)] =
+      predictions.select(idColumnName, columnName).map { r =>
+        val id = r(0).asInstanceOf[String]
+        val clazz = r(1).asInstanceOf[Int]
+        (id, clazz + 1)
+      }.collect
+
+    def extractClusterClasssedFromProbabilities(columnName: String): Traversable[(String, Int)] =
+      predictions.select(idColumnName, columnName).map { r =>
+        val id = r(0).asInstanceOf[String]
+        val clazz = r(1).asInstanceOf[DenseVector].values.zipWithIndex.maxBy(_._1)._2
+        (id, clazz + 1)
+      }.collect
+
+    val result = model match {
+      case _: KMeansModel =>
+        extractClusterClasses("prediction")
+
+      case _: LDAModel =>
+        extractClusterClasssedFromProbabilities("topicDistribution")
+
+      case _: BisectingKMeansModel =>
+        extractClusterClasses("prediction")
+
+      case _: GaussianMixtureModel =>
+        extractClusterClasssedFromProbabilities("probability")
+    }
+
+    predictions.unpersist()
+    cachedDf.unpersist
+
+    (dataFrame, result)
+  }
+
+  protected def fit[M <: Model[M]](
+    estimator: Estimator[M],
+    data: DataFrame
+  ): (M, DataFrame) = {
+    // Fit the model
+    val lrModel = estimator.fit(data)
+
+    // Make predictions.
+    val predictions = lrModel.transform(data)
+
+    (lrModel, predictions)
   }
 }
 
