@@ -8,24 +8,6 @@ This is an extension of Spark ML library (version *2.2.0*) providing:
 * Convenient customizable pipeline execution.
 * Summary evaluation metrics 
 
-#### Installation
-
-All you need is **Scala 2.11**. To pull the library you have to add the following dependency to *build.sbt*
-
-```
-"org.in-cal" %% "incal-spark_ml" % "0.2.1"
-```
-
-or to *pom.xml* (if you use maven)
-
-```
-<dependency>
-    <groupId>org.in-cal</groupId>
-    <artifactId>incal-spark_ml_2.11</artifactId>
-    <version>0.2.1</version>
-</dependency>
-```
-
 #### Examples
 
 Once you have the *incal-spark_ml* lib on your classpath you are ready to go. To conveniently launch Spark-ML based (command line) apps the  *SparkMLApp* class with automatically created/injected resources: SparkSession and SparkMLService, can be used. You can explore and run the following examples demonstrating the basic functionality (all data is public):
