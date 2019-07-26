@@ -28,7 +28,7 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
   val outputColumnName = Column.SP500Change.toString
 
   // read a csv and create a data frame with given column names
-  val url = "https://in-cal.org/data/sap_data_by_datahub.csv"
+  val url = "https://bit.ly/2OmhfOD" // SAP
   val df = remoteCsvToDataFrame(url, true)(session)
 
   // turn the data frame into ML-ready one with features and a label

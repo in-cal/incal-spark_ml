@@ -25,7 +25,7 @@ object TemporalClassificationWithSlidingWindow extends SparkMLApp((session: Spar
   val featureColumnNames = columnNames.filter(name => name != outputColumnName && name != orderColumnName)
 
   // read a csv and create a data frame with given column names
-  val url = "https://in-cal.org/data/EEG_Eye_State_by_DBWH.csv"
+  val url = "https://bit.ly/2yhOJ5y" // EEG Eye State
   val df = remoteCsvToDataFrame(url, true)(session)
 
   val df2 = df.withColumn(outputColumnName, df(Column.eyeDetection.toString).cast(BooleanType))
