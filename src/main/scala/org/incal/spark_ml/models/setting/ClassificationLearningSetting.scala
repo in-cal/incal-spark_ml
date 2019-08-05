@@ -13,7 +13,8 @@ case class ClassificationLearningSetting(
   repetitions: Option[Int] = None,
   crossValidationFolds: Option[Int] = None,
   crossValidationEvalMetric: Option[ClassificationEvalMetric.Value] = None,
-  binCurvesNumBins: Option[Int] = None
+  binCurvesNumBins: Option[Int] = None,
+  collectOutputs: Boolean = false
 ) extends LearningSetting[ClassificationEvalMetric.Value]
 
 case class TemporalClassificationLearningSetting(

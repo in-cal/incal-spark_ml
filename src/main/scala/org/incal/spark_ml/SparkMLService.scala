@@ -202,6 +202,7 @@ trait SparkMLService extends MLBase {
         outputSize,
         count,
         setting.binCurvesNumBins,
+        setting.collectOutputs,
         df,
         replicationDf
       )
@@ -239,7 +240,10 @@ trait SparkMLService extends MLBase {
         )
       }
 
-      ClassificationResultsHolder(performanceResults, counts, curves)
+      // actual vs expected outputs
+      val expectedAndActualOutputs = resultHolders.map(_.expectedAndActualOutputs)
+
+      ClassificationResultsHolder(performanceResults, counts, curves, expectedAndActualOutputs)
     }
   }
 
@@ -530,6 +534,7 @@ trait SparkMLService extends MLBase {
     outputSize: Int,
     count: Long,
     binCurvesNumBins: Option[Int],
+    collectOutputs: Boolean,
     mainDf: DataFrame,
     replicationDf: Option[DataFrame]
   ): ClassificationResultsAuxHolder = {
@@ -569,12 +574,21 @@ trait SparkMLService extends MLBase {
       } else
         (None, testPredictionsExt.map(_ => None))
 
+    // collect the actual vs expected outputs (if needed)
+    val outputs: Traversable[Seq[(Double, Double)]] =
+      if (collectOutputs) {
+        val trainingOutputs = collectLabelPredictions(trainPredictions)
+        val testOutputs = collectLabelPredictions(testPredictions)
+        Seq(trainingOutputs, testOutputs)
+      } else
+        Nil
+
     // unpersist and return the results
     trainPredictions.unpersist
     testPredictions.unpersist
     replicationPredictions.foreach(_.unpersist)
 
-    ClassificationResultsAuxHolder(results, count, binTrainingCurves, binTestCurves)
+    ClassificationResultsAuxHolder(results, count, binTrainingCurves, binTestCurves, outputs)
   }
 
   private def withBinaryEvaluationCol(outputSize: Int) = { df: DataFrame =>

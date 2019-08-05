@@ -21,11 +21,11 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     SP500Change, DividendChange, EarningsChange, ConsumerPriceIndexChange, LongInterestRateChange, RealPriceChange, RealDividendChange, RealEarningsChange, PE10Change = Value
   }
 
-  val plotter = Plotter("svg")
-
   val featureColumnNames = Seq(
-    Column.SP500Change, Column.DividendChange, Column.EarningsChange, Column.ConsumerPriceIndexChange,
-    Column.LongInterestRateChange, Column.RealPriceChange, Column.RealDividendChange, Column.RealEarningsChange, Column.PE10Change
+//    Column.SP500Change, Column.DividendChange, Column.EarningsChange, Column.ConsumerPriceIndexChange,
+//    Column.LongInterestRateChange, Column.RealPriceChange, Column.RealDividendChange, Column.RealEarningsChange,
+
+    Column.PE10Change
   ).map(_.toString)
   val outputColumnName = Column.SP500Change.toString
 
@@ -39,18 +39,18 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
   // linear regression spec
   val linearRegressionSpec = LinearRegression(
     maxIteration = Left(Some(200)),
-    regularization = Right(Seq(1, 0.1, 0.01, 0.001)),
-    elasticMixingRatio = Right(Seq(0, 0.5, 1))
+    regularization = Right(Seq(1)),
+    elasticMixingRatio = Right(Seq(0, 0.5))
   )
 
   // random regression forest spec
   val randomRegressionForestSpec = RandomRegressionForest(
-    core = TreeCore(maxDepth = Right(Seq(4,5,6)))
+    core = TreeCore(maxDepth = Right(Seq(4)))
   )
 
   // gradient-boost regression tree spec
   val gradientBoostRegressionTreeSpec = GradientBoostRegressionTree(
-    core = TreeCore(maxDepth = Right(Seq(4,5,6))),
+    core = TreeCore(maxDepth = Right(Seq(4))),
     maxIteration = Left(Some(50))
   )
 
@@ -59,7 +59,7 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     trainingTestSplitRatio = Some(0.8),
 //    featuresNormalizationType = Some(VectorScalerType.StandardScaler),
     crossValidationEvalMetric = Some(RegressionEvalMetric.rmse),
-    crossValidationFolds = Some(5),
+    crossValidationFolds = Some(2),
     collectOutputs = true
   )
 
@@ -72,7 +72,7 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     reservoirInDegree = Left(Some(20)),
     inputReservoirConnectivity = Left(Some(1)),
     weightDistribution = RandomDistribution.createNormalDistribution(classOf[java.lang.Double], 0d, 1d),
-    reservoirSpectralRadius = Right(Seq(0.9, 0.95, 0.99)),
+    reservoirSpectralRadius = Right(Seq(0.9)),
     reservoirFunctionType = ActivationFunctionType.Tanh,
     washoutPeriod = Left(Some(50))
   )
@@ -106,15 +106,33 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
       val y = outputsx.map { case (yhat, y) => y }.take(size)
       val yhat = outputsx.map { case (yhat, y) => yhat }.take(size)
 
-      val output = plotter.plotSeries(
-        Seq(y, yhat),
-        new SeriesPlotSetting()
-          .setXLabel("Time")
-          .setYLabel("Value")
-          .setCaptions(Seq("Actual Output", "Expected Output"))
+      val data = Seq(y.zipWithIndex.map { case (y, i) => (i.toDouble, y) }, yhat.zipWithIndex.map { case (y, i) => (i.toDouble, y) })
+
+      PlotlyPlotter.plotSeries(
+        data,
+        PlotSetting(
+          title = Some("Outputs"),
+          xLabel = Some("Time"),
+          yLabel = Some("Value"),
+          xMin = Some(0),
+          xMax = Some(20),
+          yMin = None,
+          yMax = None,
+          true,
+          Seq("Actual Output", "Expected Output")
+        ),
+        fileName
       )
 
-      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
+//      val output = plotter.plotSeries(
+//        Seq(y, yhat),
+//        new SeriesPlotSetting()
+//          .setXLabel("Time")
+//          .setYLabel("Value")
+//          .setCaptions(Seq("Actual Output", "Expected Output"))
+//      )
+//
+//      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
     }
   }
 
@@ -139,8 +157,8 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     println(s"Gradient Boost Regression RMSE: $gbrtTrainingRMSE / $gbrtTestRMSE")
     println(s"Gradient Boost Regression  MAE: $gbrtTrainingMAE / $gbrtTestMAE")
 
-    exportOutputs(lrResults, "lrOutputs.svg", 300)
-    exportOutputs(rrfResults, "rrfOutputs.svg", 300)
-    exportOutputs(gbrtResults, "gbrtOutputs.svg", 300)
+    exportOutputs(lrResults, "lrOutputs.html", 300)
+    exportOutputs(rrfResults, "rrfOutputs.html", 300)
+    exportOutputs(gbrtResults, "gbrtOutputs.html", 300)
   }
 })

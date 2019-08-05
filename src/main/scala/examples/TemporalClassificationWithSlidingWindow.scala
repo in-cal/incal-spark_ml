@@ -8,7 +8,7 @@ import org.incal.spark_ml.models.classification._
 import org.incal.spark_ml.models.result.ClassificationResultsHolder
 import org.incal.spark_ml.models.setting.{ClassificationLearningSetting, TemporalClassificationLearningSetting}
 import org.incal.spark_ml.transformers.BooleanLabelIndexer
-import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService, SparkMLServiceSetting}
+import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 

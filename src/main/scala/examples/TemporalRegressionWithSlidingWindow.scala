@@ -1,6 +1,5 @@
 package examples
 
-import com.banda.core.plotter.{Plotter, SeriesPlotSetting}
 import org.apache.spark.sql.SparkSession
 import org.incal.core.util.writeStringAsStream
 import org.incal.spark_ml.SparkUtil._
@@ -18,8 +17,6 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
     val index, Date, SP500, Dividend, Earnings, ConsumerPriceIndex, LongInterestRate, RealPrice, RealDividend, RealEarnings, PE10,
     SP500Change, DividendChange, EarningsChange, ConsumerPriceIndexChange, LongInterestRateChange, RealPriceChange, RealDividendChange, RealEarningsChange, PE10Change = Value
   }
-
-  val plotter = Plotter("svg")
 
   val featureColumnNames = Seq(
     Column.SP500Change, Column.DividendChange, Column.EarningsChange, Column.ConsumerPriceIndexChange,
@@ -89,15 +86,15 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
       val y = outputsx.map { case (yhat, y) => y }.take(size)
       val yhat = outputsx.map { case (yhat, y) => yhat }.take(size)
 
-      val output = plotter.plotSeries(
-        Seq(y, yhat),
-        new SeriesPlotSetting()
-          .setXLabel("Time")
-          .setYLabel("Value")
-          .setCaptions(Seq("Actual Output", "Expected Output"))
-      )
-
-      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
+//      val output = plotter.plotSeries(
+//        Seq(y, yhat),
+//        new SeriesPlotSetting()
+//          .setXLabel("Time")
+//          .setYLabel("Value")
+//          .setCaptions(Seq("Actual Output", "Expected Output"))
+//      )
+//
+//      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
     }
   }
 
