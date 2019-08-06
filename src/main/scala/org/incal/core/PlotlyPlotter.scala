@@ -8,38 +8,38 @@ import java.{lang => jl}
 object PlotlyPlotter {
 
   def plotScatter(
-    data: Seq[Seq[(Double, Double)]],
+    data: Traversable[Traversable[(Double, Double)]],
     setting: PlotSetting = PlotSetting(),
     outputFileName: String = "output.html"
   ): Unit =
     plotScatterAux(data, ScatterTrace.Mode.MARKERS, setting, outputFileName)
 
   def plotLines(
-    data: Seq[Seq[Double]],
-    xValues: Seq[Double] = Nil,
+    data: Traversable[Traversable[Double]],
+    xValues: Traversable[Double] = Nil,
     setting: PlotSetting = PlotSetting(),
     outputFileName: String = "output.html"
   ): Unit = {
     val xValuesInit = xValues match {
       case Nil => Stream.from(1).map(_.toDouble)
-      case _ => xValues
+      case _ => xValues.toSeq
     }
     plotXYLines(
-      data.map(series => series.zip(xValuesInit).map(_.swap)),
+      data.map(series => series.toSeq.zip(xValuesInit).map(_.swap)),
       setting,
       outputFileName
     )
   }
 
   def plotXYLines(
-    data: Seq[Seq[(Double, Double)]],
+    data: Traversable[Traversable[(Double, Double)]],
     setting: PlotSetting = PlotSetting(),
     outputFileName: String = "output.html"
   ): Unit =
     plotScatterAux(data, ScatterTrace.Mode.LINE, setting, outputFileName)
 
   private def plotScatterAux(
-    data: Seq[Seq[(Double, Double)]],
+    data: Traversable[Traversable[(Double, Double)]],
     mode: ScatterTrace.Mode,
     setting: PlotSetting = PlotSetting(),
     outputFileName: String = "output.html"
@@ -47,7 +47,7 @@ object PlotlyPlotter {
     val missingCaptionsCount = data.size - setting.captions.size
     val captionsInit = setting.captions ++ Seq.fill(Math.max(missingCaptionsCount, 0))("")
 
-    val traces = data.zip(captionsInit).map { case (xySeries, caption) =>
+    val traces = data.toSeq.zip(captionsInit).map { case (xySeries, caption) =>
       val x = xySeries.map(_._1)
       val y = xySeries.map(_._2)
 
