@@ -49,7 +49,10 @@ object SimpleClassification extends SparkMLApp((session: SparkSession, mlService
   )
 
   // learning setting
-  val learningSetting = ClassificationLearningSetting(repetitions = Some(10))
+  val learningSetting = ClassificationLearningSetting(
+    repetitions = Some(10),
+    collectOutputs = false // if outputs should be collected -> accessible in a results-holder at `expectedActualOutputs`
+  )
 
   // aux function to get a mean training and test accuracy
   def calcMeanAccuracy(results: ClassificationResultsHolder) = {

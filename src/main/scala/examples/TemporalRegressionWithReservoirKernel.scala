@@ -92,9 +92,9 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
 
   // aux function to export outputs using GNU plot (must be installed)
   def exportOutputs(results: RegressionResultsHolder, fileName: String, size: Int) = {
-    val outputs = results.expectedAndActualOutputs.head
-    val trainingOutputs = outputs.head
-    val testOutputs = outputs.tail.head
+    val outputs = results.expectedActualOutputs.head
+    val trainingOutputs = outputs._1
+    val testOutputs = outputs._2
 
     export(trainingOutputs, "training")
     export(testOutputs, "test")

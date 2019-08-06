@@ -75,9 +75,9 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
 
   // aux function to export outputs using GNU plot (must be installed)
   def exportOutputs(results: RegressionResultsHolder, fileName: String, size: Int) = {
-    val outputs = results.expectedAndActualOutputs.head
-    val trainingOutputs = outputs.head
-    val testOutputs = outputs.tail.head
+    val outputs = results.expectedActualOutputs.head
+    val trainingOutputs = outputs._1
+    val testOutputs = outputs._2
 
     export(trainingOutputs, "training")
     export(testOutputs, "test")
@@ -123,8 +123,8 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
     println(s"Gradient Boost Regression RMSE: $gbrtTrainingRMSE / $gbrtTestRMSE")
     println(s"Gradient Boost Regression  MAE: $gbrtTrainingMAE / $gbrtTestMAE")
 
-    exportOutputs(lrResults, "lrOutputs.svg", 300)
-    exportOutputs(rrfResults, "rrfOutputs.svg", 300)
-    exportOutputs(gbrtResults, "gbrtOutputs.svg", 300)
+    exportOutputs(lrResults, "lrOutputs.html", 300)
+    exportOutputs(rrfResults, "rrfOutputs.html", 300)
+    exportOutputs(gbrtResults, "gbrtOutputs.html", 300)
   }
 })

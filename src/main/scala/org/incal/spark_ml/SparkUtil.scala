@@ -12,6 +12,7 @@ import scala.reflect.ClassTag
 import org.incal.spark_ml.transformers.{FixedOrderStringIndexer, SchemaUnchangedTransformer}
 
 import scala.collection.mutable.ArrayBuilder
+import scala.io.BufferedSource
 import scala.util.Random
 
 object SparkUtil {
@@ -189,10 +190,19 @@ object SparkUtil {
       indexer.fit(newDf).transform(newDf).drop(columnName).withColumnRenamed(tempCol, columnName)
     }
 
+  def localCsvToDataFrame(fileName: String, header: Boolean = true)(session: SparkSession) = {
+    val src = scala.io.Source.fromFile(fileName)
+    csvSourceToDf(src, header)(session)
+  }
+
   def remoteCsvToDataFrame(url: String, header: Boolean = true)(session: SparkSession) = {
+    val src = scala.io.Source.fromURL(url)
+    csvSourceToDf(src, header)(session)
+  }
+
+  private def csvSourceToDf(src: BufferedSource, header: Boolean = true)(session: SparkSession) = {
     import session.sqlContext.implicits._
 
-    val src = scala.io.Source.fromURL(url)
     val csvData: Dataset[String] = session.sparkContext.parallelize(src.mkString.stripMargin.lines.toList).toDS()
     session.read.option("header", header).option("inferSchema", true).csv(csvData)
   }

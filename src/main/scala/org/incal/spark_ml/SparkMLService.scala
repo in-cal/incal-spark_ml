@@ -232,18 +232,12 @@ trait SparkMLService extends MLBase {
       val counts = resultHolders.map(_.count)
 
       // curves
-      val curves = resultHolders.map { resultHolder =>
-        (
-          resultHolder.binTrainingCurves,
-          resultHolder.binTestCurves.head,
-          resultHolder.binTestCurves.tail.headOption.flatten
-        )
-      }
+      val curves = resultHolders.map(_.binCurves)
 
       // actual vs expected outputs
-      val expectedAndActualOutputs = resultHolders.map(_.expectedAndActualOutputs)
+      val expectedActualOutputs = resultHolders.map(_.expectedActualOutputs)
 
-      ClassificationResultsHolder(performanceResults, counts, curves, expectedAndActualOutputs)
+      ClassificationResultsHolder(performanceResults, counts, curves, expectedActualOutputs)
     }
   }
 
@@ -376,13 +370,14 @@ trait SparkMLService extends MLBase {
       val results = evaluate(regressionEvaluators, trainPredictions, Seq(testPredictions) ++ replicationPredictions)
 
       // collect the actual vs expected outputs (if needed)
-      val outputs: Traversable[Seq[(Double, Double)]] =
+      val outputs =
         if (setting.collectOutputs) {
-          val trainingOutputs = collectLabelPredictions(trainPredictions)
-          val testOutputs = collectLabelPredictions(testPredictions)
-          Seq(trainingOutputs, testOutputs)
+          val trainingOutputs = collectDoubleLabelPredictions(trainPredictions)
+          val testOutputs = collectDoubleLabelPredictions(testPredictions)
+          val replicationOutputs = replicationPredictions.map(collectDoubleLabelPredictions)
+          (trainingOutputs, testOutputs, replicationOutputs.headOption.getOrElse(Nil))
         } else
-          Nil
+          (Nil, Nil, Nil)
 
       RegressionResultsAuxHolder(results, count, outputs)
     }
@@ -411,9 +406,9 @@ trait SparkMLService extends MLBase {
       val counts = resultHolders.map(_.count)
 
       // actual vs expected outputs
-      val expectedAndActualOutputs = resultHolders.map(_.expectedAndActualOutputs)
+      val expectedActualOutputs = resultHolders.map(_.expectedActualOutputs)
 
-      RegressionResultsHolder(performanceResults, counts, expectedAndActualOutputs)
+      RegressionResultsHolder(performanceResults, counts, expectedActualOutputs)
     }
   }
 
@@ -503,13 +498,7 @@ trait SparkMLService extends MLBase {
     paramGridBuilder.build
   }
 
-  private def collectLabelPredictions(dataFrame: DataFrame) = {
-    val df =
-      if (dataFrame.columns.find(_.equals(seriesOrderCol)).isDefined)
-        dataFrame.orderBy(seriesOrderCol)
-      else
-        dataFrame
-
+  private def collectDoubleLabelPredictions(dataFrame: DataFrame) = {
     def toDouble(value: Any) =
       value match {
         case x: Double => x
@@ -518,9 +507,31 @@ trait SparkMLService extends MLBase {
         case _ => throw new IllegalArgumentException(s"Cannot convert $value of type ${value.getClass.getName} to double.")
       }
 
+    collectLabelPredictions(dataFrame, toDouble)
+  }
+
+  private def collectIntLabelPredictions(dataFrame: DataFrame) = {
+    def toInt(value: Any) =
+      value match {
+        case x: Int => x
+        case x: Double => x.toInt
+        case x: Long => x.toInt
+        case _ => throw new IllegalArgumentException(s"Cannot convert $value of type ${value.getClass.getName} to int.")
+      }
+
+    collectLabelPredictions(dataFrame, toInt)
+  }
+
+  private def collectLabelPredictions[T](dataFrame: DataFrame, convert: Any => T): Seq[(T, T)] = {
+    val df =
+      if (dataFrame.columns.find(_.equals(seriesOrderCol)).isDefined)
+        dataFrame.orderBy(seriesOrderCol)
+      else
+        dataFrame
+
     df.select("label", "prediction")
       .collect().toSeq
-      .map(row => (toDouble(row.get(0)), toDouble(row.get(1))))
+      .map(row => (convert(row.get(0)), convert(row.get(1))))
   }
 
   private def classifyAndEvaluate(
@@ -565,30 +576,30 @@ trait SparkMLService extends MLBase {
     val results = evaluate(evaluators, trainingPredictionsExt, testPredictionsExt)
 
     // generate binary classification curves (roc, pr, etc.) if the output is binary
-    val (binTrainingCurves, binTestCurves) =
+    val binCurves =
       if (outputSize == 2) {
         // is binary
         val trainingCurves = binaryMetricsCurves(trainingPredictionsExt, binCurvesNumBins)
         val testCurves = testPredictionsExt.map(binaryMetricsCurves(_, binCurvesNumBins))
-        (trainingCurves, testCurves)
+        (trainingCurves, testCurves.head, testCurves.tail.headOption.flatten)
       } else
-        (None, testPredictionsExt.map(_ => None))
+        (None, None, None)
 
     // collect the actual vs expected outputs (if needed)
-    val outputs: Traversable[Seq[(Double, Double)]] =
+    val outputs =
       if (collectOutputs) {
-        val trainingOutputs = collectLabelPredictions(trainPredictions)
-        val testOutputs = collectLabelPredictions(testPredictions)
-        Seq(trainingOutputs, testOutputs)
+        val trainingOutputs = collectIntLabelPredictions(trainingPredictionsExt)
+        val testOutputs = testPredictionsExt.map(collectIntLabelPredictions)
+        (trainingOutputs, testOutputs.head, testOutputs.tail.headOption.getOrElse(Nil))
       } else
-        Nil
+        (Nil, Nil, Nil)
 
     // unpersist and return the results
     trainPredictions.unpersist
     testPredictions.unpersist
     replicationPredictions.foreach(_.unpersist)
 
-    ClassificationResultsAuxHolder(results, count, binTrainingCurves, binTestCurves, outputs)
+    ClassificationResultsAuxHolder(results, count, binCurves, outputs)
   }
 
   private def withBinaryEvaluationCol(outputSize: Int) = { df: DataFrame =>

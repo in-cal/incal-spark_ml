@@ -7,13 +7,12 @@ case class ClassificationResultsHolder(
   performanceResults: Traversable[ClassificationPerformance],
   counts: Traversable[Long],
   binCurves: Traversable[STuple3[Option[BinaryClassificationCurves]]],
-  expectedAndActualOutputs: Traversable[Traversable[Seq[(Double, Double)]]]
+  expectedActualOutputs: Traversable[STuple3[Seq[(Int, Int)]]]
 )
 
 case class ClassificationResultsAuxHolder(
   evalResults: Traversable[(ClassificationEvalMetric.Value, Double, Seq[Double])],
   count: Long,
-  binTrainingCurves: Option[BinaryClassificationCurves],
-  binTestCurves: Seq[Option[BinaryClassificationCurves]],
-  expectedAndActualOutputs: Traversable[Seq[(Double, Double)]]
+  binCurves: STuple3[Option[BinaryClassificationCurves]],
+  expectedActualOutputs: STuple3[Seq[(Int, Int)]]
 )
