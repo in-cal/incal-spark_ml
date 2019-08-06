@@ -83,21 +83,19 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
     export(testOutputs, "test")
 
     def export(outputsx: Seq[(Double, Double)], prefix: String) = {
-      val y = outputsx.map { case (yhat, y) => y }.take(size)
-      val yhat = outputsx.map { case (yhat, y) => yhat }.take(size)
+      val y = outputsx.map { case (_, y) => y }.take(size)
+      val yhat = outputsx.map { case (yhat, _) => yhat }.take(size)
 
-      val data = Seq(y.zipWithIndex.map { case (y, i) => (i.toDouble, y) }, yhat.zipWithIndex.map { case (y, i) => (i.toDouble, y) })
-
-      PlotlyPlotter.plotSeries(
-        data,
-        PlotSetting(
+      PlotlyPlotter.plotLines(
+        data = Seq(y, yhat),
+        setting = PlotSetting(
           title = Some("Outputs"),
           xLabel = Some("Time"),
           yLabel = Some("Value"),
           showLegend = true,
           captions = Seq("Actual Output", "Expected Output")
         ),
-        prefix + "-" + fileName
+        outputFileName = prefix + "-" + fileName
       )
     }
   }

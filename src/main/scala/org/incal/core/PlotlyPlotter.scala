@@ -7,53 +7,83 @@ import java.{lang => jl}
 
 object PlotlyPlotter {
 
-  def plotSeries(
+  def plotScatter(
     data: Seq[Seq[(Double, Double)]],
     setting: PlotSetting = PlotSetting(),
-    outputFile: String = "output.html"
+    outputFileName: String = "output.html"
+  ): Unit =
+    plotScatterAux(data, ScatterTrace.Mode.MARKERS, setting, outputFileName)
+
+  def plotLines(
+    data: Seq[Seq[Double]],
+    xValues: Seq[Double] = Nil,
+    setting: PlotSetting = PlotSetting(),
+    outputFileName: String = "output.html"
+  ): Unit = {
+    val xValuesInit = xValues match {
+      case Nil => Stream.from(1).map(_.toDouble)
+      case _ => xValues
+    }
+    plotXYLines(
+      data.map(series => series.zip(xValuesInit).map(_.swap)),
+      setting,
+      outputFileName
+    )
+  }
+
+  def plotXYLines(
+    data: Seq[Seq[(Double, Double)]],
+    setting: PlotSetting = PlotSetting(),
+    outputFileName: String = "output.html"
+  ): Unit =
+    plotScatterAux(data, ScatterTrace.Mode.LINE, setting, outputFileName)
+
+  private def plotScatterAux(
+    data: Seq[Seq[(Double, Double)]],
+    mode: ScatterTrace.Mode,
+    setting: PlotSetting = PlotSetting(),
+    outputFileName: String = "output.html"
   ) = {
-    val traces = data.zip(setting.captions).map { case (xySeries, caption) =>
+    val missingCaptionsCount = data.size - setting.captions.size
+    val captionsInit = setting.captions ++ Seq.fill(Math.max(missingCaptionsCount, 0))("")
+
+    val traces = data.zip(captionsInit).map { case (xySeries, caption) =>
       val x = xySeries.map(_._1)
       val y = xySeries.map(_._2)
 
       ScatterTrace.builder(x.toArray, y.toArray)
         .showLegend(setting.showLegend)
         .name(caption)
-        .mode(ScatterTrace.Mode.LINE)
+        .mode(mode)
         .build()
+    }
+
+    def buildAxis(
+      label: Option[String],
+      min: Option[Double],
+      max: Option[Double]
+    ) = {
+      val axis = Axis.builder.title(label.getOrElse(""))
+
+      if (min.isDefined || max.isDefined) {
+        axis.range(min.map(new jl.Double(_)).getOrElse(null), max.map(new jl.Double(_)).getOrElse(null))
+        axis.autoRange(Axis.AutoRange.FALSE)
+      }
+
+      axis.build()
     }
 
     val layout = Layout.builder(setting.title.getOrElse(""))
       .width(700).height(450)
-      .xAxis {
-        val axis = Axis.builder.title(setting.xLabel.getOrElse(""))
-
-        if (setting.xMin.isDefined || setting.xMax.isDefined) {
-          axis.range(setting.xMin.map(new jl.Double(_)).getOrElse(null), setting.xMax.map(new jl.Double(_)).getOrElse(null))
-        }
-
-        axis.autoRange(Axis.AutoRange.FALSE)
-
-        axis.build()
-      }
-      .yAxis {
-        val axis = Axis.builder.title(setting.yLabel.getOrElse(""))
-
-        if (setting.yMin.isDefined || setting.yMax.isDefined) {
-          axis.range(setting.yMin.map(new jl.Double(_)).getOrElse(null), setting.yMax.map(new jl.Double(_)).getOrElse(null))
-        }
-
-        axis.autoRange(Axis.AutoRange.FALSE)
-
-        axis.build
-      }
+      .xAxis(buildAxis(setting.xLabel, setting.xMin, setting.xMax))
+      .yAxis(buildAxis(setting.yLabel, setting.yMin, setting.yMax))
       .showLegend(setting.showLegend)
       .build
 
     val page = Page.pageBuilder(new Figure(layout, traces:_*), "target").build
     val output = page.asJavascript
 
-    writeStringAsStream(output, new java.io.File(outputFile))
+    writeStringAsStream(output, new java.io.File(outputFileName))
   }
 }
 
@@ -71,25 +101,40 @@ case class PlotSetting(
 
 object PlotlyPlotterTest extends App {
 
-  val x: Array[Double] = Array(1, 2, 3, 4, 5, 6)
-  val y: Array[Double] = Array(0, 1, 6, 14, 25, 39)
+  val x: Seq[Double] = Seq(1, 2, 3, 4, 5, 6)
+  val y: Seq[Double] = Seq(0, 1, 6, 14, 25, 39)
 
-  val x2: Array[Double] = Array(2, 4, 5, 6, 10)
-  val y2: Array[Double] = Array(1, 2, 3, 4, -1)
+  val x2: Seq[Double] = Seq(2, 4, 5, 6, 10)
+  val y2: Seq[Double] = Seq(1, 2, 3, 4, -1)
 
-  PlotlyPlotter.plotSeries(
-    Seq(x.zip(y), x2.zip(y2)), //
-    PlotSetting(
-      title = None, // Some("Lala"),
-      xLabel = None, // Some("x"),
-      yLabel = Some("y"),
-      xMin = Some(0),
-      xMax = Some(20),
-      yMin = None,
-      yMax = None,
-      false,
-      Seq("First", "Second")
-    ),
-    "lala.html"
+  val setting = PlotSetting(
+    title = Some("Test"),
+    xLabel = Some("x"),
+    yLabel = Some("y"),
+    xMin = Some(0),
+    xMax = Some(20),
+    yMin = None,
+    yMax = None,
+    false,
+    Seq("First", "Second")
+  )
+
+  PlotlyPlotter.plotXYLines(
+    Seq(x.zip(y), x2.zip(y2)),
+    setting,
+    "test-xylines.html"
+  )
+
+  PlotlyPlotter.plotLines(
+    Seq(x, y),
+    Nil,
+    setting,
+    "test-lines.html"
+  )
+
+  PlotlyPlotter.plotScatter(
+    Seq(x.zip(y), x2.zip(y2)),
+    setting,
+    "test-scatter.html"
   )
 }
