@@ -1,12 +1,12 @@
 package examples
 
 import org.apache.spark.sql.SparkSession
-import org.incal.core.util.writeStringAsStream
+import org.incal.core.{PlotSetting, PlotlyPlotter}
 import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.regression._
 import org.incal.spark_ml.models.result.RegressionResultsHolder
 import org.incal.spark_ml.models.setting.{RegressionLearningSetting, TemporalRegressionLearningSetting}
-import org.incal.spark_ml.models.{TreeCore, VectorScalerType}
+import org.incal.spark_ml.models.TreeCore
 import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -86,15 +86,19 @@ object TemporalRegressionWithSlidingWindow extends SparkMLApp((session: SparkSes
       val y = outputsx.map { case (yhat, y) => y }.take(size)
       val yhat = outputsx.map { case (yhat, y) => yhat }.take(size)
 
-//      val output = plotter.plotSeries(
-//        Seq(y, yhat),
-//        new SeriesPlotSetting()
-//          .setXLabel("Time")
-//          .setYLabel("Value")
-//          .setCaptions(Seq("Actual Output", "Expected Output"))
-//      )
-//
-//      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
+      val data = Seq(y.zipWithIndex.map { case (y, i) => (i.toDouble, y) }, yhat.zipWithIndex.map { case (y, i) => (i.toDouble, y) })
+
+      PlotlyPlotter.plotSeries(
+        data,
+        PlotSetting(
+          title = Some("Outputs"),
+          xLabel = Some("Time"),
+          yLabel = Some("Value"),
+          showLegend = true,
+          captions = Seq("Actual Output", "Expected Output")
+        ),
+        prefix + "-" + fileName
+      )
     }
   }
 

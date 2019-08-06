@@ -1,10 +1,9 @@
 package examples
 
-import com.banda.core.plotter.{Plotter, SeriesPlotSetting}
 import com.banda.math.domain.rand.RandomDistribution
 import com.banda.network.domain.ActivationFunctionType
 import org.apache.spark.sql.SparkSession
-import org.incal.core.util.writeStringAsStream
+import org.incal.core.{PlotSetting, PlotlyPlotter}
 import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.{ReservoirSpec, TreeCore}
 import org.incal.spark_ml.models.regression._
@@ -22,10 +21,8 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
   }
 
   val featureColumnNames = Seq(
-//    Column.SP500Change, Column.DividendChange, Column.EarningsChange, Column.ConsumerPriceIndexChange,
-//    Column.LongInterestRateChange, Column.RealPriceChange, Column.RealDividendChange, Column.RealEarningsChange,
-
-    Column.PE10Change
+    Column.SP500Change, Column.DividendChange, Column.EarningsChange, Column.ConsumerPriceIndexChange,
+    Column.LongInterestRateChange, Column.RealPriceChange, Column.RealDividendChange, Column.RealEarningsChange, Column.PE10Change
   ).map(_.toString)
   val outputColumnName = Column.SP500Change.toString
 
@@ -39,18 +36,18 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
   // linear regression spec
   val linearRegressionSpec = LinearRegression(
     maxIteration = Left(Some(200)),
-    regularization = Right(Seq(1)),
-    elasticMixingRatio = Right(Seq(0, 0.5))
+    regularization = Right(Seq(1, 0.1, 0.01, 0.001)),
+    elasticMixingRatio = Right(Seq(0, 0.5, 1))
   )
 
   // random regression forest spec
   val randomRegressionForestSpec = RandomRegressionForest(
-    core = TreeCore(maxDepth = Right(Seq(4)))
+    core = TreeCore(maxDepth = Right(Seq(4,5,6)))
   )
 
   // gradient-boost regression tree spec
   val gradientBoostRegressionTreeSpec = GradientBoostRegressionTree(
-    core = TreeCore(maxDepth = Right(Seq(4))),
+    core = TreeCore(maxDepth = Right(Seq(4,5,6))),
     maxIteration = Left(Some(50))
   )
 
@@ -59,7 +56,7 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     trainingTestSplitRatio = Some(0.8),
 //    featuresNormalizationType = Some(VectorScalerType.StandardScaler),
     crossValidationEvalMetric = Some(RegressionEvalMetric.rmse),
-    crossValidationFolds = Some(2),
+    crossValidationFolds = Some(5),
     collectOutputs = true
   )
 
@@ -72,7 +69,7 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
     reservoirInDegree = Left(Some(20)),
     inputReservoirConnectivity = Left(Some(1)),
     weightDistribution = RandomDistribution.createNormalDistribution(classOf[java.lang.Double], 0d, 1d),
-    reservoirSpectralRadius = Right(Seq(0.9)),
+    reservoirSpectralRadius = Right(Seq(0.9, 0.95, 0.99)),
     reservoirFunctionType = ActivationFunctionType.Tanh,
     washoutPeriod = Left(Some(50))
   )
@@ -114,25 +111,11 @@ object TemporalRegressionWithReservoirKernel extends SparkMLApp((session: SparkS
           title = Some("Outputs"),
           xLabel = Some("Time"),
           yLabel = Some("Value"),
-          xMin = Some(0),
-          xMax = Some(20),
-          yMin = None,
-          yMax = None,
-          true,
-          Seq("Actual Output", "Expected Output")
+          showLegend = true,
+          captions = Seq("Actual Output", "Expected Output")
         ),
-        fileName
+        prefix + "-" + fileName
       )
-
-//      val output = plotter.plotSeries(
-//        Seq(y, yhat),
-//        new SeriesPlotSetting()
-//          .setXLabel("Time")
-//          .setYLabel("Value")
-//          .setCaptions(Seq("Actual Output", "Expected Output"))
-//      )
-//
-//      writeStringAsStream(output, new java.io.File(prefix + "-" + fileName))
     }
   }
 
