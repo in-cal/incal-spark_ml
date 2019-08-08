@@ -1,4 +1,4 @@
-# InCal Spark ML Library [![version](https://img.shields.io/badge/version-0.2.1-green.svg)](https://in-cal.org) [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+# InCal Spark ML Library [![version](https://img.shields.io/badge/version-0.2.1-green.svg)](https://ada-discovery.github.io.org) [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This is an extension of Spark ML library (version *2.2.0*) providing:
 
@@ -31,4 +31,4 @@ Note that time-series classifications (and predictions) using convolutional neur
 Development of this library has been significantly supported by a one-year MJFF Grant (2018-2019):
 *Scalable Machine Learning And Reservoir Computing Platform for Analyzing Temporal Data Sets in the Context of Parkinson’s Disease and Biomedicine*
 
-<a href="https://www.michaeljfox.org"><img src="https://in-cal.org/mjff_logo.png" width="700"></a>
+<a href="https://www.michaeljfox.org"><img src="https://peterbanda.net/mjff_logo.png" width="700"></a>
