@@ -1,7 +1,5 @@
 package examples
 
-import com.banda.math.domain.rand.RandomDistribution
-import com.banda.network.domain.ActivationFunctionType
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.BooleanType
 import org.incal.spark_ml.SparkUtil._
@@ -11,6 +9,8 @@ import org.incal.spark_ml.models.result.ClassificationResultsHolder
 import org.incal.spark_ml.models.setting.{ClassificationLearningSetting, TemporalClassificationLearningSetting}
 import org.incal.spark_ml.transformers.BooleanLabelIndexer
 import org.incal.spark_ml.{MLResultUtil, SparkMLApp, SparkMLService}
+import com.bnd.math.domain.rand.RandomDistribution
+import com.bnd.network.domain.ActivationFunctionType
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -45,7 +45,7 @@ object TemporalClassificationWithReservoirKernel extends SparkMLApp((session: Sp
   // multi-layer perceptron spec
   val multiLayerPerceptronSpec = MultiLayerPerceptron(
     hiddenLayers = Seq(5, 5),
-    blockSize = Right(Seq(32,64,128))
+    blockSize = Right(Seq(32, 64, 128))
   )
 
   // learning setting

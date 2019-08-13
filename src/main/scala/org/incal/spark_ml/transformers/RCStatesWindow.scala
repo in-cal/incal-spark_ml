@@ -3,9 +3,9 @@ package org.incal.spark_ml.transformers
 import java.{lang => jl}
 import javax.inject.{Inject, Singleton}
 
-import com.banda.math.domain.rand.RandomDistribution
-import com.banda.network.business.learning.ReservoirRunnableFactory
-import com.banda.network.domain.{ActivationFunctionType, ReservoirSetting}
+import com.bnd.math.domain.rand.RandomDistribution
+import com.bnd.network.business.learning.ReservoirRunnableFactory
+import com.bnd.network.domain.{ActivationFunctionType, ReservoirSetting}
 import org.apache.spark.ml.linalg.SQLDataTypes
 import org.apache.spark.ml._
 import org.apache.spark.ml.param.{Param, ParamMap}

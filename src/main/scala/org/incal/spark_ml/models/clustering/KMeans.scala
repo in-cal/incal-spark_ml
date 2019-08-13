@@ -9,7 +9,7 @@ object KMeansInitMode extends Enumeration {
 }
 
 case class KMeans(
-  _id: Option[BSONObjectID],
+  _id: Option[BSONObjectID] = None,
   k: Int,
   maxIteration: Option[Int] = None,
   tolerance: Option[Double] = None,

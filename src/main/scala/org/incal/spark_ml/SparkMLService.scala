@@ -786,11 +786,10 @@ trait SparkMLService extends MLBase {
 
   def cluster(
     df: DataFrame,
-    idColumnName: String,
     mlModel: Clustering,
-    featuresNormalizationType: Option[VectorScalerType.Value],
-    pcaDim: Option[Int]
-  ): (DataFrame, Traversable[(String, Int)]) = {
+    featuresNormalizationType: Option[VectorScalerType.Value] = None,
+    pcaDim: Option[Int] = None
+  ): DataFrame = {
     val trainer = SparkMLEstimatorFactory(mlModel)
 
     // normalize
@@ -804,36 +803,43 @@ trait SparkMLService extends MLBase {
     val dataFrame = pipeline.fit(df).transform(df)
 
     val cachedDf = dataFrame.cache()
-    val classes = fitClustersAndGetClasses(trainer, cachedDf, idColumnName)
+    val resultDf = fitClustersAndGetClasses(trainer, cachedDf)
 
     cachedDf.unpersist
 
-    (dataFrame, classes)
+    resultDf
   }
+
+  private val classExtract = udf { vector: DenseVector => vector.values.zipWithIndex.maxBy(_._1)._2 }
 
   private def fitClustersAndGetClasses[M <: Model[M]](
     estimator: Estimator[M],
-    data: DataFrame,
-    idColumnName: String
-  ): Traversable[(String, Int)] = {
+    data: DataFrame
+  ): DataFrame = { // Traversable[(String, Int)]
     val (model, predictions) = fit(estimator, data)
     predictions.cache()
 
     implicit val encoder = Encoders.tuple(Encoders.STRING, Encoders.scalaInt)
 
-    def extractClusterClasses(columnName: String): Traversable[(String, Int)] =
-      predictions.select(idColumnName, columnName).map { r =>
-        val id = r(0).asInstanceOf[String]
-        val clazz = r(1).asInstanceOf[Int]
-        (id, clazz + 1)
-      }.collect
+    def extractClusterClasses(columnName: String): DataFrame =
+      predictions.withColumn("cluster", predictions(columnName))
 
-    def extractClusterClassesFromProbabilities(columnName: String): Traversable[(String, Int)] =
-      predictions.select(idColumnName, columnName).map { r =>
-        val id = r(0).asInstanceOf[String]
-        val clazz = r(1).asInstanceOf[DenseVector].values.zipWithIndex.maxBy(_._1)._2
-        (id, clazz + 1)
-      }.collect
+    def extractClusterClassesFromProbabilities(columnName: String): DataFrame =
+      predictions.withColumn("cluster", classExtract(predictions(columnName)))
+
+    //    def extractClusterClasses(columnName: String): Traversable[(String, Int)] =
+    //      predictions.select(idColumnName, columnName).map { r =>
+    //        val id = r(0).asInstanceOf[String]
+    //        val clazz = r(1).asInstanceOf[Int]
+    //        (id, clazz + 1)
+    //      }.collect
+    //
+    //    def extractClusterClassesFromProbabilities(columnName: String): Traversable[(String, Int)] =
+    //      predictions.select(idColumnName, columnName).map { r =>
+    //        val id = r(0).asInstanceOf[String]
+    //        val clazz = r(1).asInstanceOf[DenseVector].values.zipWithIndex.maxBy(_._1)._2
+    //        (id, clazz + 1)
+    //      }.collect
 
     val result = model match {
       case _: KMeansModel =>

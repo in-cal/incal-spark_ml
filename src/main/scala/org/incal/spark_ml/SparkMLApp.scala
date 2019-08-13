@@ -1,6 +1,6 @@
 package org.incal.spark_ml
 
-import com.banda.network.business.NetworkModule
+import com.bnd.network.business.NetworkModule
 import com.google.inject.Guice
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Dataset, SparkSession}

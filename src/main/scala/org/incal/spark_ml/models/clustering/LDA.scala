@@ -5,7 +5,7 @@ import java.util.Date
 import reactivemongo.bson.BSONObjectID
 
 case class LDA(
-  _id: Option[BSONObjectID],
+  _id: Option[BSONObjectID] = None,
   k: Int,
   maxIteration: Option[Int] = None,
   seed: Option[Long] = None,

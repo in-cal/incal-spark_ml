@@ -5,7 +5,7 @@ import java.util.Date
 import reactivemongo.bson.BSONObjectID
 
 case class GaussianMixture(
-  _id: Option[BSONObjectID],
+  _id: Option[BSONObjectID] = None,
   k: Int,
   maxIteration: Option[Int] = None,
   tolerance: Option[Double] = None,

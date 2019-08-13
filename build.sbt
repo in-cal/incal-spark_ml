@@ -11,15 +11,14 @@ isSnapshot := false
 scalaVersion := "2.11.12"
 
 resolvers ++= Seq(
-  Resolver.mavenLocal,
-  "bnd libs" at "https://peterbanda.net/maven2"
+  Resolver.mavenLocal
 )
 
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % "2.2.0",
   "org.apache.spark" %% "spark-sql" % "2.2.0",
   "org.apache.spark" %% "spark-mllib" % "2.2.0",
-  "com.banda" % "banda-network-guice" % "0.6.0",
+  "com.bnd-lib" % "bnd-network-guice" % "0.7.0",
   "tech.tablesaw" % "tablesaw-jsplot" % "0.34.1",
   "org.slf4j" % "slf4j-api" % "1.7.21",
   "org.in-cal" %% "incal-core" % "0.2.1",
@@ -55,11 +54,11 @@ licenseOverrides := {
   | DepModuleInfo("org.apache.zookeeper", "zookeeper", "3.4.6")
   | DepModuleInfo("com.fasterxml.jackson.module", "jackson-module-paranamer", "2.6.5")
   | DepModuleInfo("io.netty", "netty-all", "4.0.43.Final")
-  | DepModuleInfo("com.banda", "banda-core", "0.6.0")
-  | DepModuleInfo("com.banda", "banda-function", "0.6.0")
-  | DepModuleInfo("com.banda", "banda-math", "0.6.0")
-  | DepModuleInfo("com.banda", "banda-network", "0.6.0")
-  | DepModuleInfo("com.banda", "banda-network-guice", "0.6.0")
+  | DepModuleInfo("com.bnd-lib", "bnd-core", "0.7.0")
+  | DepModuleInfo("com.bnd-lib", "bnd-function", "0.7.0")
+  | DepModuleInfo("com.bnd-lib", "bnd-math", "0.7.0")
+  | DepModuleInfo("com.bnd-lib", "bnd-network", "0.7.0")
+  | DepModuleInfo("com.bnd-lib", "bnd-network-guice", "0.7.0")
   | DepModuleInfo("org.codehaus.jettison", "jettison", "1.1")
   | DepModuleInfo("org.htrace", "htrace-core", "3.0.4")
   | DepModuleInfo("org.mortbay.jetty", "jetty-util", "6.1.26")

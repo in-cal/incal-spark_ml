@@ -1,7 +1,7 @@
 package examples
 
-import com.banda.math.domain.rand.RandomDistribution
-import com.banda.network.domain.ActivationFunctionType
+import com.bnd.math.domain.rand.RandomDistribution
+import com.bnd.network.domain.ActivationFunctionType
 import org.apache.spark.sql.SparkSession
 import org.incal.core.{PlotSetting, PlotlyPlotter}
 import org.incal.spark_ml.SparkUtil._

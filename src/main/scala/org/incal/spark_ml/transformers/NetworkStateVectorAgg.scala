@@ -2,8 +2,8 @@ package org.incal.spark_ml.transformers
 
 import java.{lang => jl}
 
-import com.banda.network.business.NetworkRunnableFactoryUtil.NetworkRunnable
-import com.banda.network.domain.TopologicalNode
+import com.bnd.network.business.NetworkRunnableFactoryUtil.NetworkRunnable
+import com.bnd.network.domain.TopologicalNode
 
 protected class NetworkStateVectorAgg(
   networkRunnable: NetworkRunnable[jl.Double],

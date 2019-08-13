@@ -2,8 +2,8 @@ package org.incal.spark_ml.models
 
 import java.{lang => jl}
 
-import com.banda.math.domain.rand.RandomDistribution
-import com.banda.network.domain.ActivationFunctionType
+import com.bnd.math.domain.rand.RandomDistribution
+import com.bnd.network.domain.ActivationFunctionType
 import org.incal.spark_ml.models.ValueOrSeq.ValueOrSeq
 
 case class ReservoirSpec(
