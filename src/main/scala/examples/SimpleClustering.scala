@@ -1,11 +1,10 @@
 package examples
 
-import org.apache.commons.lang.StringUtils
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.incal.spark_ml.SparkUtil._
 import org.incal.spark_ml.models.clustering.{BisectingKMeans, KMeans}
 import org.incal.spark_ml.{SparkMLApp, SparkMLService}
-import org.incal.core.util.{GroupMapList3, nonAlphanumericToUnderscore}
+import org.incal.core.util.{GroupMapList3, nonAlphanumericToUnderscore, toHumanReadableCamel}
 import org.incal.core.{PlotSetting, PlotlyPlotter}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -35,12 +34,6 @@ object SimpleClustering extends SparkMLApp((session: SparkSession, mlService: Sp
 
   // bisecting k-means
   val bisKMeansSpec = BisectingKMeans(k = 3)
-
-  // move to core
-  def toHumanReadableCamel(s: String): String =
-    StringUtils.splitByCharacterTypeCamelCase(s.replaceAll("[_|\\.]", " ")).filter(!_.equals(" ")).map(
-      _.toLowerCase.capitalize
-    ).mkString(" ")
 
   // helper function to plot the results
   def plotResults(resultsDf: DataFrame, title: String) = {
