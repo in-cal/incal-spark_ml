@@ -2,7 +2,7 @@ import com.typesafe.sbt.license.{DepModuleInfo, LicenseInfo}
 
 name := "incal-spark_ml"
 
-version := "0.2.2.RC.4"
+version := "0.2.2"
 
 description := "Spark ML library extension primarily for the temporal domain with a lot of handy transformers, classification and regression models, and a convenient customizable pipeline execution."
 
@@ -21,7 +21,7 @@ libraryDependencies ++= Seq(
   "com.bnd-lib" % "bnd-network-guice" % "0.7.0",
   "tech.tablesaw" % "tablesaw-jsplot" % "0.34.1",
   "org.slf4j" % "slf4j-api" % "1.7.21",
-  "org.in-cal" %% "incal-core" % "0.2.2.RC.3",
+  "org.in-cal" %% "incal-core" % "0.2.2",
   "org.reactivemongo" %% "reactivemongo-bson" % "0.18.1"    // BSON ids should be removed together with this lib
 )
 
