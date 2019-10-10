@@ -1,0 +1,11 @@
+language: scala
+scala:
+   - 2.11.12
+jdk:
+  - openjdk8
+before_cache:
+  # Cleanup the cached directories to avoid unnecessary cache updates
+  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+cache:
+  directories:
+    - $HOME/.ivy2/cache
