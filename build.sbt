@@ -1,5 +1,7 @@
 import com.typesafe.sbt.license.{DepModuleInfo, LicenseInfo}
 
+organization := "org.in-cal"
+
 name := "incal-spark_ml"
 
 version := "0.2.3"
@@ -117,9 +119,10 @@ licenseOverrides := {
   case DepModuleInfo("org.slf4j", _, _) =>
     LicenseInfo(LicenseCategory.MIT, "MIT", "http://opensource.org/licenses/MIT")
 }
-organization := "org.in-cal"
 
 // POM settings for Sonatype
+homepage := Some(url("https://in-cal.org"))
+
 publishMavenStyle := true
 
 scmInfo := Some(ScmInfo(url("https://github.com/peterbanda/incal-spark_ml"), "scm:git@github.com:peterbanda/incal-spark_ml.git"))
