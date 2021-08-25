@@ -4,11 +4,11 @@ organization := "org.in-cal"
 
 name := "incal-spark_ml"
 
-version := "0.3.0"
+version := "0.3.1-SNAPSHOT"
 
 description := "Spark ML library extension primarily for the temporal domain with a lot of handy transformers, classification and regression models, and a convenient customizable pipeline execution."
 
-isSnapshot := false
+isSnapshot := true
 
 scalaVersion := "2.11.12"
 
